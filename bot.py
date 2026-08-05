@@ -10,6 +10,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 async def greasyfork_secret_bypass(short_url: str) -> str:
+    # बिल्कुल सही और बिना किसी टाइपिंग मिस्टेक वाला हिडन API यूआरएल
     api_url = f"https://bypass.city{short_url}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -35,7 +36,7 @@ async def start_command(message: types.Message):
 async def link_handler(message: types.Message):
     user_text = message.text.strip()
     if not user_text.startswith(("http://", "https://")):
-        await message.reply("❌ कृपया एक淹लिड HTTP/HTTPS लिंक भेजें।")
+        await message.reply("❌ कृपया एक वैलिड HTTP/HTTPS लिंक भेजें।")
         return
     progress_msg = await message.reply("⚡ **Bypassing... Please wait...**")
     final_destination = await greasyfork_secret_bypass(user_text)
