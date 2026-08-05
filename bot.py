@@ -15,7 +15,9 @@ async def greasyfork_secret_bypass(short_url: str) -> str:
     यह क्लाउडफ्लेयर, कैप्चा और एड्स को 0.5 सेकंड में बायपास करता है।
     """
     # Greasy Fork स्क्रिप्ट का हिडन बैकएंड API एंडपॉइंट
-    api_url = f"https://bypass.city{short_url}"
+   api_url = f"https://bypass.city{short_url}"
+
+
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
