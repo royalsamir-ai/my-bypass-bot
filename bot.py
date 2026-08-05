@@ -76,6 +76,25 @@ async def main():
     print("[SYSTEM] Bot is successfully running with GreasyFork Engine...")
     await dp.start_polling(bot)
 
+async def dummy_server():
+    # रेंडर (Render) को खुश रखने के लिए बैकग्राउंड में एक छोटा सा वेब पोर्ट चालू करना
+    import os
+    from aiohttp import web
+    app = web.Application()
+    app.router.add_get('/', lambda r: web.Response(text="Bot is Alive"))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"[SYSTEM] Dummy server started on port {port}")
+
+async def start_all():
+    # दोनों काम एक साथ चलेंगे: डमी सर्वर भी और टेलीग्राम बोट भी
+    await dummy_server()
+    await main()
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(start_all())
+
 
