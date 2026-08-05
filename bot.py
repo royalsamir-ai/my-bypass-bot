@@ -3,8 +3,8 @@ import aiohttp
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 
-BOT_TOKEN =  "8686759049:AAFYdI4AX47W5kGlPptRu3UkhGcu9OaZimk"
-"
+BOT_TOKEN = "8686759049:AAFYdI4AX47W5kGlPptRu3UkhGcu9OaZimk"
+
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
