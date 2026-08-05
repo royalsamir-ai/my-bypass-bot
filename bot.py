@@ -11,30 +11,32 @@ dp = Dispatcher()
 
 async def multi_bypasser(short_url: str) -> str:
     """
-    यह इंजन दो अलग-अलग प्रीमियम सर्वर्स का इस्तेमाल करता है। 
-    अगर एक फेल हुआ, तो दूसरा 100% लिंक निकाल कर देगा!
+    Triple-API Power Engine: 
+    3 अलग-अलग सर्वर्स की चेन। कोई न कोई एक तो लिंक निकाल कर देगा ही!
     """
-    # ---- सर्व़र 1: Multi-Bypasser API ----
-    api_url_1 = f"https://bot.nu{short_url}"
-    # ---- सर्वर 2: Bypass.city API ----
-    api_url_2 = f"https://bypass.city{short_url}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    # ---- सर्वर 1: एडवांस्ड वर्कर एपीआई (भारतीय लिंक्स के लिए बेस्ट) ----
+    api_url_1 = f"https://workers.dev{short_url}"
+    # ---- सर्वर 2: Multi-Bypasser ----
+    api_url_2 = f"https://bot.nu{short_url}"
+    # ---- सर्वर 3: Bypass.city ----
+    api_url_3 = f"https://bypass.city{short_url}"
     
     async with aiohttp.ClientSession() as session:
-        # पहले सर्वर 1 को ट्राई करें (यह easysky जैसे शॉर्टनर्स के लिए बेस्ट है)
+        # ट्राई सर्वर 1 (यह सबसे नया और एक्टिव है)
         try:
             async with session.get(api_url_1, headers=headers, timeout=8) as response:
                 if response.status == 200:
                     data = await response.json()
+                    # अगर रिस्पॉन्स में सीधे डेस्टिनेशन लिंक मिल जाए
                     if "destination" in data: return data["destination"]
                     elif "url" in data: return data["url"]
+                    elif "bypassed_url" in data: return data["bypassed_url"]
         except Exception:
-            pass # अगर पहला फेल हुआ, तो चुपचाप दूसरे पर बढ़ो
+            pass
 
-        # बैकअप सर्वर 2 को ट्राई करें
+        # ट्राई सर्वर 2
         try:
             async with session.get(api_url_2, headers=headers, timeout=8) as response:
                 if response.status == 200:
@@ -43,12 +45,22 @@ async def multi_bypasser(short_url: str) -> str:
                     elif "url" in data: return data["url"]
         except Exception:
             pass
+
+        # ट्राई सर्वर 3
+        try:
+            async with session.get(api_url_3, headers=headers, timeout=8) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "destination" in data: return data["destination"]
+                    elif "url" in data: return data["url"]
+        except Exception:
+            pass
             
-        return "❌ Bypass Failed: इस लिंक की सिक्योरिटी बहुत हाई है या सर्वर मेंटेनेंस पर है।"
+        return "❌ Bypass Failed: सभी सर्वर्स डाउन हैं या इस लिंक पर बहुत हाई कैप्चा सुरक्षा है।"
 
 @dp.message(CommandStart())
 async def start_command(message: types.Message):
-    await message.reply("🔥 **Welcome to India's Strongest Multi-API Bypasser Bot!**\n\nमुझे कोई भी लिंक भेजें, मैं उसे अलग-अलग सर्वर्स से क्रैक करने की कोशिश करूँगा।")
+    await message.reply("🔥 **Welcome to India's Strongest Multi-API Bypasser Bot!**\n\nमुझे कोई भी लिंक भेजें, मैं उसे 3 अलग-अलग प्रीमियम सर्वर्स से क्रैक कर दूँगा।")
 
 @dp.message()
 async def link_handler(message: types.Message):
@@ -57,7 +69,7 @@ async def link_handler(message: types.Message):
         await message.reply("❌ कृपया एक वैलिड HTTP/HTTPS लिंक भेजें।")
         return
         
-    progress_msg = await message.reply("⚡ **Bypassing using Multi-API Engine... Please wait...**")
+    progress_msg = await message.reply("⚡ **Bypassing using Triple-API Engine... Please wait...**")
     final_destination = await multi_bypasser(user_text)
     
     if final_destination.startswith("http"):
