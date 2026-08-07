@@ -429,8 +429,9 @@ class BypassService:
 
 bot = Bot(
     token=BOT_TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    default=DefaultBotProperties(parse_mode="HTML")
 )
+
 dp = Dispatcher()
 
 http_session: Optional[aiohttp.ClientSession] = None
