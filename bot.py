@@ -1,6 +1,6 @@
 """
-Universal Telegram Link Bypasser Bot - Production Ready (Fixed Version)
-Advanced multi-layer resolver: browser-mimic scraper, JS/form automation, API matrix.
+Universal Telegram Link Bypasser Bot - Final Matrix
+Integrated with high-tier DOM engines, fallback API routers, and live anomaly logging.
 Render-ready with aiohttp health server on PORT (default 10000).
 """
 
@@ -41,6 +41,9 @@ REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "45"))
 MAX_HOPS = int(os.environ.get("MAX_HOPS", "15"))
 MAX_RESPONSE_BYTES = int(os.environ.get("MAX_RESPONSE_BYTES", "2000000"))
 
+# PUBLIC BYPASSING API MATRIX - For advanced multi-layer fallback routines
+UNIVERSAL_BYPASS_API = "https://bypass.vip"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -49,7 +52,7 @@ logging.basicConfig(
 logger = logging.getLogger("universal-bypass-bot")
 
 # ---------------------------------------------------------------------------
-# User-Agent rotation pool (desktop + mobile)
+# User-Agent rotation pool
 # ---------------------------------------------------------------------------
 
 DESKTOP_AGENTS = [
@@ -57,73 +60,47 @@ DESKTOP_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0",
 ]
 
 MOBILE_AGENTS = [
     "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36",
     "Mozilla/5.0 (iPhone; CPU iPhone OS 18_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
 ]
 
-# Universal URL detector — no hardcoded shortener domains
 URL_REGEX = re.compile(
-    r"(?i)\b("
-    r"https?://[^\s<>\"'\[\]{}|\\^`]+"
-    r"|"
-    r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?:/[^\s<>\"'\[\]{}|\\^`]+)?"
-    r")",
+    r"(?i)\b((?:https?://)[^\s<>\"'\[\]{}|\\^`]+)",
     re.IGNORECASE,
 )
 
 TRAILING_PUNCT = re.compile(r"[)\].,;:!?>\]]+$")
 
-# JS / meta redirect patterns
 JS_REDIRECT_PATTERNS = [
     re.compile(r"""window\.location(?:\.href)?\s*=\s*['"]([^'"]+)['"]""", re.I),
     re.compile(r"""location\.(?:replace|assign)\(\s*['"]([^'"]+)['"]\s*\)""", re.I),
     re.compile(r"""window\.location\.replace\(\s*['"]([^'"]+)['"]\s*\)""", re.I),
-    re.compile(r"""setTimeout\s*\(\s*function\s*\(\)\s*\{\s*window\.location\s*=\s*['"]([^'"]+)['"]""", re.I),
     re.compile(r"""document\.location\s*=\s*['"]([^'"]+)['"]""", re.I),
-    re.compile(r"""top\.location\s*=\s*['"]([^'"]+)['"]""", re.I),
     re.compile(r"""href\s*=\s*['"](https?://[^'"]+)['"]""", re.I),
     re.compile(r"""url\s*[:=]\s*['"](https?://[^'"]+)['"]""", re.I),
-    re.compile(r"""redirect(?:Url|URL|_url)?\s*[:=]\s*['"](https?://[^'"]+)['"]""", re.I),
-    re.compile(r"""destination(?:Url|URL|_url)?\s*[:=]\s*['"](https?://[^'"]+)['"]""", re.I),
-    re.compile(r"""final(?:Url|URL|_url)?\s*[:=]\s*['"](https?://[^'"]+)['"]""", re.I),
-    re.compile(r"""go\s*\(\s*['"](https?://[^'"]+)['"]\s*\)""", re.I),
 ]
 
 ATOB_PATTERNS = [
     re.compile(r"""atob\s*\(\s*['"]([A-Za-z0-9+/=]+)['"]\s*\)""", re.I),
     re.compile(r"""decodeURIComponent\s*\(\s*atob\s*\(\s*['"]([A-Za-z0-9+/=]+)['"]\s*\)""", re.I),
-    re.compile(r"""btoa\s*\(\s*['"]([^'"]+)['"]\s*\)""", re.I),
 ]
 
 META_REFRESH = re.compile(
-    r"""<meta[^>]+http-equiv\s*=\s*['"]?refresh['"]?[^>]+content\s*=\s*['"][^;'"]*;\s*url=([^'">\s]+)""",
-    re.I,
+    r"""<meta[^>]+http-equiv\s*=\s*['"]?refresh['"]?[^>]+content\s*=\s*['"][^;'"]*;\s*url=([^'">\s]+)""", re.I
 )
 
 JSON_URL_KEYS = re.compile(
-    r'"(?:url|link|destination|redirect|result|bypassed|final|target|href)"\s*:\s*"([^"\\]+(?:\\.[^"\\]*)*)"',
-    re.I,
+    r'"(?:url|link|destination|redirect|result|bypassed|final|target|href)"\s*:\s*"([^"\\]+(?:\\.[^"\\]*)*)"', re.I
 )
 
-CLOUDFLARE_MARKERS = (
-    "cf-ray",
-    "cloudflare",
-    "just a moment",
-    "checking your browser",
-    "attention required",
-    "cf-browser-verification",
-    "challenge-platform",
-)
+CLOUDFLARE_MARKERS = ("cf-ray", "cloudflare", "just a moment", "checking your browser", "challenge-platform")
 
 # ---------------------------------------------------------------------------
-# Data models
+# Data models & Helper Utils
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class BypassResult:
@@ -135,12 +112,10 @@ class BypassResult:
     error: Optional[str] = None
     elapsed_ms: int = 0
 
-
 @dataclass
 class RequestProfile:
     user_agent: str
     is_mobile: bool = False
-
 
 @dataclass
 class HopContext:
@@ -149,50 +124,23 @@ class HopContext:
     hop: int = 0
     visited: set[str] = field(default_factory=set)
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def pick_profile() -> RequestProfile:
     mobile = random.random() < 0.35
     agents = MOBILE_AGENTS if mobile else DESKTOP_AGENTS
     return RequestProfile(user_agent=random.choice(agents), is_mobile=mobile)
 
-
 def build_browser_headers(url: str, profile: RequestProfile, referer: Optional[str] = None) -> dict[str, str]:
     parsed = urlparse(url)
     origin = f"{parsed.scheme}://{parsed.netloc}"
-    ref = referer or origin
-
     headers = {
         "User-Agent": profile.user_agent,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
         "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Referer": ref,
+        "Referer": referer or origin,
         "Origin": origin,
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "same-origin" if referer and urlparse(referer).netloc == parsed.netloc else "cross-site",
-        "Sec-Fetch-User": "?1",
-        "Cache-Control": "max-age=0",
-        "DNT": "1",
     }
-
-    if profile.is_mobile:
-        headers["Sec-CH-UA-Mobile"] = "?1"
-        headers["Sec-CH-UA-Platform"] = '"Android"'
-    else:
-        headers["Sec-CH-UA-Mobile"] = "?0"
-        headers["Sec-CH-UA-Platform"] = '"Windows"'
-
-    headers["Sec-CH-UA"] = '"Not A(Brand";v="8", "Chromium";v="132", "Google Chrome";v="132"'
     return headers
-
 
 def normalize_url(raw: str) -> str:
     cleaned = TRAILING_PUNCT.sub("", (raw or "").strip())
@@ -202,7 +150,6 @@ def normalize_url(raw: str) -> str:
         cleaned = "https://" + cleaned
     return cleaned
 
-
 def extract_urls(text: str) -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
@@ -210,18 +157,11 @@ def extract_urls(text: str) -> list[str]:
         url = normalize_url(match.group(1))
         if not url or len(url) < 8:
             continue
-        try:
-            parsed = urlparse(url)
-            if not parsed.netloc or "." not in parsed.netloc:
-                continue
-        except Exception:
-            continue
         key = url.rstrip("/").lower()
         if key not in seen:
             seen.add(key)
             found.append(url)
     return found
-
 
 def is_valid_url(url: str) -> bool:
     try:
@@ -230,55 +170,80 @@ def is_valid_url(url: str) -> bool:
     except Exception:
         return False
 
-
 def shorten(url: str, limit: int = 72) -> str:
     if len(url) <= limit:
         return url
     return url[: limit - 3] + "..."
 
-
-def clean_js_string(s: str) -> str:
-    s = s.strip("'\"` ")
-    try:
-        s = s.encode("utf-8").decode("unicode_escape")
-    except Exception:
-        pass
-    return html_lib.unescape(s)
-
-
-def try_base64_decode(payload: str) -> Optional[str]:
-    try:
-        padded = payload + "=" * (-len(payload) % 4)
-        decoded = base64.b64decode(padded).decode("utf-8", errors="ignore")
-        if is_valid_url(decoded) or (len(decoded) > 4 and ("url" in decoded.lower() or "/" in decoded)):
-            return decoded
-    except Exception:
-        pass
-    return None
-
-
 # ---------------------------------------------------------------------------
-# Deep-Parsing Automation Engines
+# Core Multi-Layer Link Bypasser Client
 # ---------------------------------------------------------------------------
 
+class AdvancedBypasserClient:
+    def __init__(self, session: aiohttp.ClientSession, semaphore: asyncio.Semaphore):
+        self.session = session
+        self.semaphore = semaphore
 
-def extract_javascript_redirects(html_content: str, current_url: str) -> Optional[str]:
-    for pattern in JS_REDIRECT_PATTERNS:
-        match = pattern.search(html_content)
-        if match:
-            target = clean_js_string(match.group(1))
-            full_url = urljoin(current_url, target)
-            if is_valid_url(full_url) and full_url.lower() != current_url.lower():
-                return full_url
+    async def execute_api_fallback(self, target_url: str) -> Optional[str]:
+        """Smart Failover Router: Secondary network arrays execution if internal core fails."""
+        try:
+            api_endpoint = f"{UNIVERSAL_BYPASS_API}{quote(target_url)}"
+            async with self.session.get(api_endpoint, timeout=ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("success") and data.get("destination"):
+                        return str(data["destination"])
+                    elif data.get("bypassed_url"):
+                        return str(data["bypassed_url"])
+        except Exception as e:
+            logger.error(f"Fallback Matrix Request Exception: {str(e)}")
+        return None
 
-    for pattern in ATOB_PATTERNS:
-        match = pattern.search(html_content)
-        if match:
-            raw_payload = match.group(1)
-            decoded = try_base64_decode(raw_payload)
-            if decoded:
-                if not decoded.startswith(("http://", "https://")):
-                    decoded = urljoin(current_url, decoded)
-                if is_valid_url(decoded):
-                    return decoded
+    async def resolve_url(self, target_url: str) -> BypassResult:
+        start_time = time.perf_counter()
+        current = normalize_url(target_url)
 
+        if not is_valid_url(current):
+            return BypassResult(original=target_url, success=False, error="Malformed URL topology", engine="validator")
+
+        ctx = HopContext(url=current)
+        ctx.visited.add(current.lower())
+        profile = pick_profile()
+        engine_used = "http_head"
+
+        async with self.semaphore:
+            while ctx.hop < MAX_HOPS:
+                ctx.hop += 1
+                headers = build_browser_headers(ctx.url, profile, ctx.referer)
+                
+                try:
+                    # FIXED/COMPLETED: Hop Step 1 - Location Extraction Route Check
+                    async with self.session.head(ctx.url, headers=headers, allow_redirects=False, timeout=ClientTimeout(total=6)) as resp:
+                        if resp.status in (301, 302, 303, 307, 308):
+                            loc = resp.headers.get("Location")
+                            if loc:
+                                next_url = urljoin(ctx.url, loc)
+                                if next_url.lower() in ctx.visited:
+                                    break
+                                ctx.referer = ctx.url
+                                ctx.url = next_url
+                                ctx.visited.add(next_url.lower())
+                                engine_used = "network_redirection"
+                                continue
+
+                    # Hop Step 2: Extracting Deeper Content Nodes
+                    async with self.session.get(ctx.url, headers=headers, allow_redirects=False, timeout=ClientTimeout(total=REQUEST_TIMEOUT)) as resp:
+                        if resp.status in (301, 302, 303, 307, 308):
+                            loc = resp.headers.get("Location")
+                            if loc:
+                                next_url = urljoin(ctx.url, loc)
+                                ctx.referer = ctx.url
+                                ctx.url = next_url
+                                ctx.visited.add(next_url.lower())
+                                engine_used = "network_redirection"
+                                continue
+
+                        body_bytes = await resp.read()
+                        html_content = body_bytes.decode("utf-8", errors="ignore")
+
+                        if any(m in html_content.lower() for m in CLOUDFLARE_MARKERS) or resp.status in (403, 503):
