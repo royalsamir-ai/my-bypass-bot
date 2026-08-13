@@ -1,5 +1,5 @@
 """
-Universal Telegram Link Bypasser Bot - Final Matrix
+Universal Telegram Link Bypasser Bot - Final Matrix (Indentation Fixed)
 Integrated with high-tier DOM engines, fallback API routers, and live anomaly logging.
 Render-ready with aiohttp health server on PORT (default 10000).
 """
@@ -217,7 +217,7 @@ class AdvancedBypasserClient:
                 headers = build_browser_headers(ctx.url, profile, ctx.referer)
                 
                 try:
-                    # FIXED/COMPLETED: Hop Step 1 - Location Extraction Route Check
+                    # Hop Step 1: Location Extraction Route Check
                     async with self.session.head(ctx.url, headers=headers, allow_redirects=False, timeout=ClientTimeout(total=6)) as resp:
                         if resp.status in (301, 302, 303, 307, 308):
                             loc = resp.headers.get("Location")
@@ -246,4 +246,4 @@ class AdvancedBypasserClient:
                         body_bytes = await resp.read()
                         html_content = body_bytes.decode("utf-8", errors="ignore")
 
-                        if any(m in html_content.lower() for m in CLOUDFLARE_MARKERS) or resp.status in (403, 503):
+                        
