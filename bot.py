@@ -11,12 +11,10 @@ from bs4 import BeautifulSoup
 from curl_cffi import requests as cf_requests
 
 # === BOT TOKEN SETUP ===
-# Render par Environment Variables mein BOT_TOKEN naam se apna token daalna
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # === SMART CACHE SYSTEM ===
-# Ek baar bypass hua link yaad rakhega taaki agli baar 0.1s mein de sake
 cache_db = {}
 
 # === RENDER KEEP-ALIVE SERVER ===
@@ -35,7 +33,7 @@ def keep_alive():
 # === BYPASS LOGIC ENGINES ===
 
 def simple_hash(string):
-    """SakirMobile Hash Logic Converted from JS"""
+    """SakirMobile Hash Logic"""
     h = 0
     for char in string:
         h = ((h << 5) - h + ord(char)) & 0xFFFFFFFF
@@ -63,7 +61,7 @@ def bypass_vipteam(game="OrangeFox"):
         data = res.json()
         if data.get("success"):
             return f"VIP Key: {data.get('key')}"
-    except Exception as e:
+    except Exception:
         pass
     return None
 
@@ -111,6 +109,41 @@ def bypass_gplinks(url):
         pass
     return None
 
+def bypass_adlinkfly(url):
+    """Generic Engine for AdLinkFly Clones (urllinkshort, vplink, earnlinks, etc.)"""
+    try:
+        client = cf_requests.Session(impersonate="chrome")
+        res = client.get(url)
+        soup = BeautifulSoup(res.content, "html.parser")
+        
+        # Scrape hidden validation tokens
+        inputs = soup.find_all("input")
+        data = {input.get('name'): input.get('value') for input in inputs if input.get('name')}
+        
+        if not data:
+            return None
+            
+        # Simulate timer bypass (Server-side wait)
+        time.sleep(3.5)
+        
+        headers = {
+            "x-requested-with": "XMLHttpRequest",
+            "Referer": url
+        }
+        
+        # Detect correct POST endpoint
+        form = soup.find("form")
+        post_url = form.get("action") if form and form.get("action") else url
+            
+        res2 = client.post(post_url, data=data, headers=headers)
+        json_data = res2.json()
+        
+        if json_data and 'url' in json_data:
+            return json_data['url']
+            
+    except Exception:
+        pass
+    return None
 
 # === TELEGRAM HANDLERS ===
 
@@ -119,7 +152,7 @@ def send_welcome(message):
     welcome_text = (
         "🚀 *Ultimate Link Bypasser Bot is Online!*\n\n"
         "Please send your link to bypass it instantly.\n"
-        "Supported shorteners: GPLinks, LKSFY, VIP Team, SakirMobile, Nicktrick, and more."
+        "Supported: GPLinks, LKSFY, VIP Team, SakirMobile, Nicktrick, EarnLinks, VPLink & more."
     )
     bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
@@ -129,6 +162,10 @@ def handle_message(message):
     
     if not url.startswith("http"):
         bot.reply_to(message, "⚠️ *Invalid Input*\nPlease send a valid URL starting with 'http' or 'https'.", parse_mode="Markdown")
+        return
+
+    if "t.me/" in url or "telegram.me/" in url:
+        bot.reply_to(message, "ℹ️ *Notice*\nThis is a Telegram post link. Please send the actual short URL that contains the timer/ads.", parse_mode="Markdown")
         return
 
     # Check Cache
@@ -149,20 +186,22 @@ def handle_message(message):
         result = bypass_nicktrick(url)
     elif any(x in url for x in ["lksfy", "sharclub", "sportswordz", "mealcold", "xtglinks", "7vibelife"]):
         result = bypass_lksfy_xtg(url)
-    elif "getkey" in url:  # Usually Alpharede
+    elif any(x in url for x in ["urllinkshort.in", "vplink.in", "earnlinks.in", "inddrive.com", "indianshortner.in", "shortxlinks.in", "liteshort.com", "easysky.in", "vipshort.in", "indiaearnx.in", "softurl.in", "rempo.xyz", "arolinks.com", "bicolink.com", "shrinkme.click", "short4cash.com"]):
+        result = bypass_adlinkfly(url)
+    elif any(x in url for x in ["getkey", "alpharede.com"]):
         result = bypass_alpharede(url)
     elif "gplinks" in url:
         result = bypass_gplinks(url)
     else:
-        # Generic Attempt using Alpharede logic as fallback
-        result = bypass_alpharede(url)
+        # Generic Attempt
+        result = bypass_adlinkfly(url) or bypass_alpharede(url)
 
     # Response
     if result:
         cache_db[url] = result # Save to cache
         bot.edit_message_text(f"✅ *Success!*\n\n🔗 *Bypassed Link:*\n`{result}`", chat_id=message.chat.id, message_id=msg.message_id, parse_mode="Markdown")
     else:
-        bot.edit_message_text("❌ *Error*\nSorry, I couldn't bypass this link. It might be invalid, expired, or currently unsupported.", chat_id=message.chat.id, message_id=msg.message_id, parse_mode="Markdown")
+        bot.edit_message_text("❌ *Error*\nSorry, I couldn't bypass this link. It might be invalid, expired, or have a manual CAPTCHA.", chat_id=message.chat.id, message_id=msg.message_id, parse_mode="Markdown")
 
 # === START ENGINE ===
 if __name__ == "__main__":
@@ -170,4 +209,3 @@ if __name__ == "__main__":
     keep_alive()
     print("Bot Engine is Running...")
     bot.infinity_polling()
-    
