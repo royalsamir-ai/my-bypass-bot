@@ -1,32 +1,17 @@
-STREAMING_CHUNK: Base image
+# Use the official Playwright image directly 
+FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
 
-Hum official Python image use kar rahe hain
-
-FROM python:3.10-slim
-
-STREAMING_CHUNK: Setting working directory
-
+# Set the working directory
 WORKDIR /app
 
-STREAMING_CHUNK: Copying requirements
-
+# Copy requirements file first
 COPY requirements.txt .
 
-STREAMING_CHUNK: Installing Python packages
-
+# Install python packages
 RUN pip install --no-cache-dir -r requirements.txt
 
-STREAMING_CHUNK: Installing Playwright and its hidden system dependencies
-
-Yeh sabse zaroori step hai Railway ke liye
-
-RUN playwright install chromium
-RUN playwright install-deps chromium
-
-STREAMING_CHUNK: Copying the bot code
-
+# Copy the rest of your bot's code
 COPY . .
 
-STREAMING_CHUNK: Starting the bot
-
+# Run the bot 
 CMD ["python", "bot.py"]
