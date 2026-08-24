@@ -8,8 +8,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # === BOT SETUP ===
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-CHANNEL_USERNAME = "@studywallahshield"  # Your channel username
-
 bot = telebot.TeleBot(BOT_TOKEN)
 cache_db = {}
 user_coins = {}
@@ -19,22 +17,11 @@ class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Study Wallah Cuties Bypasser is Running!")
+        self.wfile.write(b"Study Wallah Group Bypasser is Running!")
 def keep_alive():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(('0.0.0.0', port), DummyHandler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-
-# === FORCE SUB CHECKER ===
-def is_subscribed(user_id):
-    try:
-        chat_member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        if chat_member.status in ['member', 'administrator', 'creator']:
-            return True
-        return False
-    except Exception as e:
-        print(f"Force Sub Error: {e}")
-        return False
 
 # === BYPASS ENGINE ===
 def get_bypassed_link(url):
@@ -55,28 +42,10 @@ def get_bypassed_link(url):
             continue
     return None
 
-# === BUTTON CALLBACK HANDLERS (FIXED) ===
-@bot.callback_query_handler(func=lambda call: True)
-def handle_callbacks(call):
-    user_id = call.from_user.id
-    
-    if call.data == "withdraw_coins":
-        bot.answer_callback_query(call.id, "✨ Withdrawal system coming soon, cutie! 🎀", show_alert=True)
-    
-    elif call.data == "check_sub":
-        if is_subscribed(user_id):
-            bot.answer_callback_query(call.id, "✨ Yay! Verified successfully, cutie! 🎀", show_alert=True)
-            try:
-                bot.delete_message(call.message.chat.id, call.message.message_id)
-            except:
-                pass
-            bot.send_message(
-                call.message.chat.id, 
-                "✨ *Welcome back, cutie!* 🎀\n\nYou are now verified. Send me any short link to bypass and start earning coins! 🚀", 
-                parse_mode="Markdown"
-            )
-        else:
-            bot.answer_callback_query(call.id, "🥺 Oops! Please join our cute channel first to unlock the bot!", show_alert=True)
+# === WITHDRAWAL BUTTON HANDLER ===
+@bot.callback_query_handler(func=lambda call: call.data == "withdraw_coins")
+def handle_withdrawal(call):
+    bot.answer_callback_query(call.id, "✨ Withdrawal system coming soon, cutie! 🎀", show_alert=True)
 
 # === MAIN PROCESSING THREAD ===
 def process_link(message, url, msg, start_time):
@@ -88,7 +57,7 @@ def process_link(message, url, msg, start_time):
     
     result = get_bypassed_link(url)
     
-    bot.edit_message_text("🔗 *SCANNING...* ⚡\n`▬▬▬▬▬▬▬▬▬▬[-]`\n*99%* 🎀", chat_id=chat_id, message_id=message_id, parse_mode="Markdown")
+    bot.edit_message_text("🔗 *SCANNING...* ⚡\n`▬▬▬▬▬▬▬▬▬▬[-]`\n*99%* 🎀", chat_id=chat_id, message_id=message_id, parse_Mode="Markdown")
     time.sleep(1)
 
     time_taken = round(time.time() - start_time, 1)
@@ -116,44 +85,22 @@ def process_link(message, url, msg, start_time):
     else:
         bot.edit_message_text("❌ *Bypass Failed*\nOh no cutie! This link is too heavily encrypted or the server is offline 🥺.", chat_id=chat_id, message_id=message_id, parse_mode="Markdown")
 
-# === TELEGRAM HANDLERS ===
+# === TELEGRAM HANDLERS (NO FORCE SUB IN GROUP) ===
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    user_id = message.from_user.id
-    if not is_subscribed(user_id):
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("🎀 Join Our Cute Channel", url="https://t.me/studywallahshield"))
-        markup.add(InlineKeyboardButton("✅ I Have Joined", callback_data="check_sub"))
-        bot.reply_to(
-            message, 
-            f"⚠️ **Access Denied! This is only for cuties 🎀**\n\nHi {message.from_user.first_name} ✨\nPlease join our official channel to use this bot!", 
-            parse_mode="Markdown", 
-            reply_markup=markup
-        )
-        return
-
-    bot.reply_to(message, "✨ *Hello cutie!* 🎀\n\nI am your personal link bypasser bot. Send me any short link to get started and earn coins! 🚀", parse_mode="Markdown")
+    bot.reply_to(
+        message, 
+        "✨ *Hello cutie!* 🎀\n\nI am your group bypasser bot. Send me any short link here to get started and earn coins! 🚀", 
+        parse_mode="Markdown"
+    )
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     user_id = message.from_user.id
     url = message.text.strip()
 
-    if not is_subscribed(user_id):
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("🎀 Join Our Cute Channel", url="https://t.me/studywallahshield"))
-        markup.add(InlineKeyboardButton("✅ I Have Joined", callback_data="check_sub"))
-        bot.reply_to(
-            message, 
-            f"⚠️ **Access Denied! This is only for cuties 🎀**\n\nPlease join our official channel first to unlock bypass features!", 
-            parse_mode="Markdown", 
-            reply_markup=markup
-        )
-        return
-    
     if not url.startswith("http"):
-        bot.reply_to(message, "⚠️ Cutie, please send a valid URL starting with http/https 🥺")
-        return
+        return  # Agar text link nahi hai to ignore karega
 
     start_time = time.time()
     msg = bot.reply_to(message, "🔗 *SCANNING...* ⚡\n`▬[----------]`\n*12%* 🎀", parse_mode="Markdown")
@@ -162,4 +109,4 @@ def handle_message(message):
 if __name__ == "__main__":
     keep_alive()
     bot.infinity_polling()
-                          
+    
