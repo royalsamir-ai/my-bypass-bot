@@ -1,112 +1,117 @@
 import os
 import time
-import threading
-import requests
-import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# === BOT SETUP ===
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-bot = telebot.TeleBot(BOT_TOKEN)
-cache_db = {}
-user_coins = {}
+# === ENVIRONMENT VARIABLES SE DETAILS UTHANA ===
+API_ID = int(os.environ.get("API_ID", "37847572"))
+API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8686759049:AAHxpXOjt97ApkXXIranQxJSGQYIUBHU7hY")
+SECRET_GROUP_ID = int(os.environ.get("SECRET_GROUP_ID", "-1004308606160"))
 
-# === RAILWAY KEEP-ALIVE SERVER ===
-class DummyHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Study Wallah Group Bypasser is Running!")
-def keep_alive():
-    port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(('0.0.0.0', port), DummyHandler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+# Initialize Pyrogram Bot & Userbot
+app = Client(
+    "studywallah_session",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN
+)
 
-# === BYPASS ENGINE ===
-def get_bypassed_link(url):
-    apis = [
-        f"https://api.bypass.vip/bypass?url={url}",
-        f"https://dlp.hasanali.me/api/bypass?url={url}",
-        f"https://api.bypassi.com/bypass?url={url}",
-        f"https://bypass.city/api/bypass?url={url}"
-    ]
-    
-    for api in apis:
-        try:
-            r = requests.get(api, timeout=12).json()
-            for key in ["result", "url", "destination", "bypassed_link"]:
-                if key in r and r[key] and str(r[key]).startswith("http"):
-                    return r[key]
-        except:
-            continue
-    return None
+pending_requests = {}
 
-# === WITHDRAWAL BUTTON HANDLER ===
-@bot.callback_query_handler(func=lambda call: call.data == "withdraw_coins")
-def handle_withdrawal(call):
-    bot.answer_callback_query(call.id, "✨ Withdrawal system coming soon, cutie! 🎀", show_alert=True)
-
-# === MAIN PROCESSING THREAD ===
-def process_link(message, url, msg, start_time):
-    chat_id = message.chat.id
-    user_id = message.from_user.id
-    message_id = msg.message_id
-    
-    bot.edit_message_text("🔗 *SCANNING...* ⚡\n`▬▬▬▬▬[------]`\n*50%* 🎀", chat_id=chat_id, message_id=message_id, parse_mode="Markdown")
-    
-    result = get_bypassed_link(url)
-    
-    bot.edit_message_text("🔗 *SCANNING...* ⚡\n`▬▬▬▬▬▬▬▬▬▬[-]`\n*99%* 🎀", chat_id=chat_id, message_id=message_id, parse_Mode="Markdown")
-    time.sleep(1)
-
-    time_taken = round(time.time() - start_time, 1)
-
-    if result and result.startswith("http"):
-        cache_db[url] = result
-        user_coins[user_id] = user_coins.get(user_id, 0) + 10
-        current_coins = user_coins[user_id]
-
-        success_text = (
-            f"*Original Link :* ❞\n"
-            f"✅ {url}\n\n"
-            f"*Bypassed Link:* ❞\n"
-            f"✅ `{result}`\n\n"
-            f"*Time Taken : {time_taken} seconds* ❞\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"*Powered By @studywallahshield* ❞\n\n"
-            f"💰 *Coins Earned:* +10 🪙 (Total: {current_coins})"
-        )
-        
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("💸 Withdrawal", callback_data="withdraw_coins"))
-
-        bot.edit_message_text(success_text, chat_id=chat_id, message_id=message_id, parse_mode="Markdown", reply_markup=markup, disable_web_page_preview=True)
-    else:
-        bot.edit_message_text("❌ *Bypass Failed*\nOh no cutie! This link is too heavily encrypted or the server is offline 🥺.", chat_id=chat_id, message_id=message_id, parse_mode="Markdown")
-
-# === TELEGRAM HANDLERS (NO FORCE SUB IN GROUP) ===
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-    bot.reply_to(
-        message, 
-        "✨ *Hello cutie!* 🎀\n\nI am your group bypasser bot. Send me any short link here to get started and earn coins! 🚀", 
-        parse_mode="Markdown"
+# === 1. START COMMAND ===
+@app.on_message(filters.command("start") & filters.private)
+async def start_handler(client, message):
+    await message.reply_text(
+        "✨ *Hello cutie!* 🎀\n\n"
+        "I am your personal link bypasser bot. Send me any short link to get started and earn coins! 🚀\n\n"
+        "⚡ *Powered By @studywallahshield*",
+        parse_mode="markdown"
     )
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
-    user_id = message.from_user.id
+# === 2. HANDLE INCOMING LINKS FROM USERS ===
+@app.on_message(filters.text & filters.private & ~filters.command(["start", "help"]))
+async def link_handler(client, message):
     url = message.text.strip()
-
+    
     if not url.startswith("http"):
-        return  # Agar text link nahi hai to ignore karega
+        await message.reply_text("⚠️ Cutie, please send a valid URL starting with http/https 🥺")
+        return
 
-    start_time = time.time()
-    msg = bot.reply_to(message, "🔗 *SCANNING...* ⚡\n`▬[----------]`\n*12%* 🎀", parse_mode="Markdown")
-    threading.Thread(target=process_link, args=(message, url, msg, start_time)).start()
+    msg = await message.reply_text("🔗 *SCANNING...* ⚡\n`▬[----------]`\n*12%* 🎀", parse_mode="markdown")
+    
+    try:
+        # Link ko secret group me bhejo jahan Nick baitha hai
+        sent_msg = await client.send_message(SECRET_GROUP_ID, url)
+        
+        pending_requests[sent_msg.id] = {
+            "chat_id": message.chat.id,
+            "message_id": msg.id,
+            "original_url": url,
+            "start_time": time.time()
+        }
+        
+    except Exception as e:
+        await msg.edit_text(f"❌ *Error:* Secret group mein link nahi bhej paya.\nDetails: `{e}`", parse_mode="markdown")
+
+# === 3. LISTEN TO NICK BOT'S REPLY IN THE SECRET GROUP ===
+@app.on_message(filters.chat(SECRET_GROUP_ID) & filters.incoming)
+async def nick_listener(client, message):
+    if message.reply_to_message and message.reply_to_message.id in pending_requests:
+        req_info = pending_requests.pop(message.reply_to_message.id)
+        
+        chat_id = req_info["chat_id"]
+        msg_id = req_info["message_id"]
+        original_url = req_info["original_url"]
+        time_taken = round(time.time() - req_info["start_time"], 1)
+        
+        response_text = message.text or message.caption or ""
+        
+        bypassed_link = None
+        for word in response_text.split():
+            if word.startswith("http") and word != original_url:
+                bypassed_link = word
+                break
+                
+        if bypassed_link:
+            success_text = (
+                f"*Original Link :* ❞\n"
+                f"✅ {original_url}\n\n"
+                f"*Bypassed Link:* ❞\n"
+                f"✅ `{bypassed_link}`\n\n"
+                f"*Time Taken : {time_taken} seconds* ❞\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"*Powered By @studywallahshield* ❞\n\n"
+                f"💰 *Coins Earned:* +10 🪙 (Total: 10)"
+            )
+            
+            markup = InlineKeyboardMarkup([[
+                InlineKeyboardButton("💸 Withdrawal", callback_data="withdraw_coins")
+            ]])
+            
+            await client.edit_message_text(
+                chat_id=chat_id,
+                message_id=msg_id,
+                text=success_text,
+                parse_mode="markdown",
+                reply_markup=markup,
+                disable_web_page_preview=True
+            )
+        else:
+            await client.edit_message_text(
+                chat_id=chat_id,
+                message_id=msg_id,
+                text="❌ *Bypass Failed*\nNick bot couldn't extract the link properly 🥺.",
+                parse_mode="markdown"
+            )
+
+# === 4. CALLBACK BUTTON HANDLER ===
+@app.on_callback_query()
+async def callback_handler(client, callback_query):
+    if callback_query.data == "withdraw_coins":
+        await callback_query.answer("✨ Bot coming soon 🎀", show_alert=True)
 
 if __name__ == "__main__":
-    keep_alive()
-    bot.infinity_polling()
+    print("🚀 Study Wallah Userbot Bypasser is Starting...")
+    app.run()
     
