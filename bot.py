@@ -1,10 +1,8 @@
 import os
 import time
-import re
-import urllib.parse
 import threading
-import requests
 import telebot
+import cloudscraper
 from bs4 import BeautifulSoup
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -18,7 +16,7 @@ class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Million Dollar Bypasser Running!")
+        self.wfile.write(b"Bot is Running Perfectly!")
 def keep_alive():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(('0.0.0.0', port), DummyHandler)
@@ -26,59 +24,51 @@ def keep_alive():
 
 # === GOD-TIER BYPASS ENGINE ===
 def million_dollar_bypass(url):
+    # Cloudflare security bypass karne ke liye cloudscraper
+    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+    
+    # Method 1: Native VpLink / EasySky Bypass (Bot Khud Karega)
     try:
-        parsed = urllib.parse.urlparse(url)
-        host = parsed.netloc.lower()
-        qs = urllib.parse.parse_qs(parsed.query)
-
-        # 1. Nicktrick Stealth Bypass (Instant Decode)
-        if "nicktrick" in qs:
-            target = qs["nicktrick"][0]
-            for _ in range(3): # Safe decode loop
-                target = urllib.parse.unquote(target)
-            if target.startswith("http"):
-                return target
-
-        # 2. LKSFY Instant Bypass
-        lksfy_hosts = ["sharclub.in", "sportswordz.com", "wblaxmibhandar.com", "schemepro.org", "recruitmentaim.in"]
-        if any(x in host for x in lksfy_hosts) and "id" in qs:
-            return f"https://lksfy.com/{qs['id'][0]}"
-
-        # 3. Fast Xtglinks Bypass
-        xtg_hosts = ["7vibelife.com", "creditshui.com", "education.netherportalcalculator.com", "instabiosai.com"]
-        if any(x in host for x in xtg_hosts):
-            token = qs.get("token", qs.get("id", [None]))[0]
-            if token:
-                return f"https://xtglinks.com/{token}"
-
-        # 4. Alpharede Source Extraction
-        client = requests.Session()
-        client.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
-        res = client.get(url, timeout=10)
+        res = scraper.get(url, timeout=15)
+        soup = BeautifulSoup(res.text, 'html.parser')
         
-        match = re.search(r'destination["\']?\s*:\s*["\']([^"\']+)["\']', res.text)
-        if match:
-            return match.group(1).replace('\\/', '/')
-
-        # 5. Multi-API Aggregator (For vplink, easysky, etc.)
-        apis = [
-            f"https://api.bypass.vip/bypass?url={url}",
-            f"https://dlp.hasanali.me/api/bypass?url={url}",
-            f"https://api.bypassi.com/bypass?url={url}"
-        ]
+        # Website ke hidden tokens nikaalo
+        inputs = soup.find_all('input')
+        data = {inp.get('name'): inp.get('value') for inp in inputs if inp.get('name')}
         
-        for api in apis:
-            try:
-                r = requests.get(api, timeout=12).json()
-                for key in ["result", "url", "destination", "bypassed_link", "bypassed"]:
-                    if key in r and r[key] and r[key].startswith("http"):
-                        return r[key]
-            except:
-                continue
-                
+        if data and "_method" in data:  
+            time.sleep(4)  # Timer bypass wait
+            domain = url.split('/')[2]
+            post_url = f"https://{domain}/links/go"
+            headers = {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Origin': f"https://{domain}",
+                'Referer': url
+            }
+            
+            # Seedha token bhej kar link mango
+            res2 = scraper.post(post_url, data=data, headers=headers, timeout=15)
+            json_data = res2.json()
+            if 'url' in json_data:
+                return json_data['url']
     except Exception as e:
-        print(f"Bypass Error: {e}")
-        
+        print(f"Native Error: {e}")
+
+    # Method 2: Premium Fallback APIs (Agar Method 1 fail hua toh)
+    apis = [
+        f"https://api.bypass.vip/bypass?url={url}",
+        f"https://api.bypassi.com/bypass?url={url}",
+        f"https://dlp.hasanali.me/api/bypass?url={url}"
+    ]
+    for api in apis:
+        try:
+            r = scraper.get(api, timeout=10).json()
+            for key in ["result", "url", "destination", "bypassed_link"]:
+                if key in r and r[key] and str(r[key]).startswith("http"):
+                    return r[key]
+        except:
+            continue
+
     return None
 
 # === MAIN PROCESSING THREAD ===
@@ -86,13 +76,10 @@ def process_link(message, url, msg):
     chat_id = message.chat.id
     message_id = msg.message_id
     
-    # Progress Bar UI Update
     bot.edit_message_text("🔗 *SCANNING...* ⚡\n`▬▬▬▬▬[------]`\n*50%* 🔥", chat_id=chat_id, message_id=message_id, parse_mode="Markdown")
     
-    # Run the God-Tier Engine
     result = million_dollar_bypass(url)
     
-    # Fake progress delay for premium feel
     time.sleep(1)
     bot.edit_message_text("🔗 *SCANNING...* ⚡\n`▬▬▬▬▬▬▬▬▬▬[-]`\n*99%* 🔥", chat_id=chat_id, message_id=message_id, parse_mode="Markdown")
     time.sleep(1)
@@ -101,19 +88,19 @@ def process_link(message, url, msg):
         cache_db[url] = result
         bot.edit_message_text(f"✅ *Bypass Successful!*\n\n🔗 *Original:* {url}\n🔓 *Bypassed:* `{result}`", chat_id=chat_id, message_id=message_id, parse_mode="Markdown", disable_web_page_preview=True)
     else:
-        bot.edit_message_text("❌ *Bypass Failed*\nLink bahut zyada encrypted hai ya server offline hai.", chat_id=chat_id, message_id=message_id, parse_mode="Markdown")
+        bot.edit_message_text("❌ *Bypass Failed*\nLink ka server block kar raha hai ya Cloudflare security bahut high hai.", chat_id=chat_id, message_id=message_id, parse_mode="Markdown")
 
 # === TELEGRAM HANDLERS ===
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "🚀 *God-Tier Bypasser Bot is Online!*\n\nSend me any supported short link.", parse_mode="Markdown")
+    bot.reply_to(message, "🚀 *Advanced Bypasser Bot is Online!*\n\nSend me your vplink.in or easysky.in link.", parse_mode="Markdown")
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     url = message.text.strip()
     
     if not url.startswith("http"):
-        bot.reply_to(message, "⚠️ Please send a valid URL starting with http.")
+        bot.reply_to(message, "⚠️ Please send a valid URL.")
         return
 
     if url in cache_db:
@@ -124,7 +111,6 @@ def handle_message(message):
     threading.Thread(target=process_link, args=(message, url, msg)).start()
 
 if __name__ == "__main__":
-    print("Starting Million Dollar Bypasser...")
     keep_alive()
     bot.infinity_polling()
-                     
+    
