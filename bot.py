@@ -1,82 +1,95 @@
 import os
-import time
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import asyncio
+from pyrogram import Client, filters, idle
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.errors import UserNotParticipant
+from pyrogram.enums import ChatMemberStatus
 
-# Details direct yahan daal rahe hain taaki variable ka koi lafda na rahe
-API_ID = 37847572
-API_HASH = "e79d219ac2531482d3ceb281b9190c58"
-BOT_TOKEN = "8686759049:AAHxpXOjt97ApkXXIranQxJSGQYIUBHU7hY"
-SECRET_GROUP_ID = -1004308606160
+# ---------------- VARIABLES ----------------
+API_ID = int(os.environ.get("API_ID", 37847572))
+API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+SESSION_STRING = os.environ.get("SESSION_STRING", "")
+SECRET_GROUP_ID = int(os.environ.get("SECRET_GROUP_ID", 0))
 
-# Pyrogram Client (Userbot + Bot dono ek sath)
-app = Client(
-    "studywallah_session",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN
-)
+# Tera main channel jahan Force Sub lagana hai (Bina '@' ke)
+FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
 
-pending_requests = {}
+# ---------------- CLIENTS ----------------
+bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-@app.on_message(filters.command("start") & filters.private)
-async def start_handler(client, message):
-    await message.reply_text(
-        "✨ *Hello cutie!* 🎀\n\n"
-        "I am your personal link bypasser bot. Send me any short link to get started! 🚀\n\n"
-        "⚡ *Powered By @studywallahshield*",
-        parse_mode="markdown"
-    )
 
-@app.on_message(filters.text & filters.private & ~filters.command(["start", "help"]))
-async def link_handler(client, message):
-    url = message.text.strip()
-    if not url.startswith("http"):
-        await message.reply_text("⚠️ Please send a valid URL starting with http/https 🥺")
-        return
-
-    msg = await message.reply_text("🔗 *SCANNING...* ⚡\n`▬[----------]`\n*12%* 🎀", parse_mode="markdown")
-    try:
-        sent_msg = await client.send_message(SECRET_GROUP_ID, url)
-        pending_requests[sent_msg.id] = {
-            "chat_id": message.chat.id,
-            "message_id": msg.id,
-            "original_url": url,
-            "start_time": time.time()
-        }
-    except Exception as e:
-        await msg.edit_text(f"❌ *Error:* {e}", parse_mode="markdown")
-
-@app.on_message(filters.chat(SECRET_GROUP_ID) & filters.incoming)
-async def nick_listener(client, message):
-    if message.reply_to_message and message.reply_to_message.id in pending_requests:
-        req_info = pending_requests.pop(message.reply_to_message.id)
-        chat_id = req_info["chat_id"]
-        msg_id = req_info["message_id"]
-        original_url = req_info["original_url"]
-        time_taken = round(time.time() - req_info["start_time"], 1)
-        
-        response_text = message.text or message.caption or ""
-        bypassed_link = None
-        for word in response_text.split():
-            if word.startswith("http") and word != original_url:
-                bypassed_link = word
-                break
+@bot.on_message(filters.private & filters.text)
+async def handle_user_links(client, message: Message):
+    user_text = message.text
+    
+    # ---------------- 1. FORCE SUB CHECK ----------------
+    if FORCE_SUB_CHANNEL:
+        try:
+            # Check karte hain ki user ne channel join kiya hai ya nahi
+            user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
+            if user_status.status in [ChatMemberStatus.BANNED, ChatMemberStatus.RESTRICTED]:
+                return await message.reply_text("❌ Cutie, tum channel se banned ho. Main tumhari help nahi kar sakta.")
                 
-        if bypassed_link:
-            success_text = (
-                f"*Original Link :* ❞\n✅ {original_url}\n\n"
-                f"*Bypassed Link:* ❞\n✅ `{bypassed_link}`\n\n"
-                f"*Time Taken : {time_taken} seconds* ❞\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"*Powered By @studywallahshield* ❞\n\n"
-                f"💰 *Coins Earned:* +10 🪙"
+        except UserNotParticipant:
+            # Agar join nahi kiya, toh pyaar se "cutie" language me bolenge
+            return await message.reply_text(
+                "**Hey cuties! 🥺**\n\nMujhse fast link bypass karwana hai? Toh phle jaldi se humara main channel join kar lo! Join karne ke baad hi main aage process karunga na.\n\n👇 **Fast Join Main Channel (Delete in 24 hr) & Send Link Again!**",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]
+                ])
             )
-            await client.edit_message_text(chat_id=chat_id, message_id=msg_id, text=success_text, parse_mode="markdown", disable_web_page_preview=True)
+        except Exception as e:
+            print(f"Force Sub Error: {e}")
+            # Agar bot channel me admin nahi hoga toh yahan error aayega
+
+    # ---------------- 2. PROCESS LINK ----------------
+    msg = await message.reply_text("⏳ **Bypassing your link cutie... Please wait!**")
+    
+    try:
+        # Userbot chupchap link ko secret group me bhejega
+        sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
+        
+        # Nick ka reply aane ka wait
+        await asyncio.sleep(6) 
+        
+        # Secret group se reply fetch karna
+        bypassed_link = None
+        async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
+            if reply.reply_to_message_id == sent_msg.id or (reply.from_user and reply.from_user.is_bot):
+                bypassed_link = reply.text
+                break
+        
+        # Final Message with Footer
+        if bypassed_link:
+            final_text = (
+                f"✅ **Bypass Successful!**\n\n"
+                f"{bypassed_link}\n\n"
+                f"⚡ **Powered by @StudyWallahSamir**\n"
+                f"🎁 **Want paid batches free access? Join @studywallahsamir**"
+            )
+            await msg.edit_text(final_text, disable_web_page_preview=True)
         else:
-            await client.edit_message_text(chat_id=chat_id, message_id=msg_id, text="❌ *Bypass Failed* 🥺", parse_mode="markdown")
+            await msg.edit_text("❌ **Oops cutie!** Bypass fail ho gaya. Link check karo ya thodi der baad aana.")
+            
+    except Exception as e:
+        await msg.edit_text("❌ Aww, kuch technical error aa gaya cutie! Admin ko batao.")
+        print(f"Error: {e}")
+
+
+# ---------------- START SERVICES ----------------
+async def start_services():
+    print("Main Bot Start ho raha hai...")
+    await bot.start()
+    print("Background Userbot Start ho raha hai...")
+    await userbot.start()
+    print("🔥 TERA SYSTEM EKDUM READY HAI! 🔥")
+    
+    await idle()
+    
+    await bot.stop()
+    await userbot.stop()
 
 if __name__ == "__main__":
-    print("🚀 Starting Userbot...")
-    app.run()
-    
+    asyncio.get_event_loop().run_until_complete(start_services())
