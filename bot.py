@@ -28,7 +28,8 @@ userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_s
 
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
-    user_text = message.text
+    # Strip lagaya taaki extra space problem na kare
+    user_text = message.text.strip() 
     
     # ---------------- 1. FORCE SUB CHECK ----------------
     if FORCE_SUB_CHANNEL:
@@ -51,14 +52,11 @@ async def handle_user_links(client, message: Message):
     msg = await message.reply_text("⏳ **Processing 10%... Waking up bots** 🧸")
     
     try:
-        # Userbot ki apni ID pata karo
-        my_info = await userbot.get_me()
-        my_id = my_info.id
-
         # Step 1: Send link to secret group
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
         extracted_link = None
+        last_seen_msg = "" # X-RAY ke liye
         
         # Step 2: percentage animation with emojis
         processing_steps = [
@@ -69,21 +67,24 @@ async def handle_user_links(client, message: Message):
         ]
         
         for step_text in processing_steps:
-            await asyncio.sleep(4) # Wait and let Nick reply
+            await asyncio.sleep(4) 
             await msg.edit_text(step_text)
             
             # Check history
             async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                # Ensure it's a NEW message, and NOT sent by us (so it must be Nick)
-                if reply.id > sent_msg.id and reply.from_user and reply.from_user.id != my_id:
-                    msg_text = reply.text or reply.caption
-                    if msg_text:
-                        # FOOLPROOF LOGIC: Extract ALL links from Nick's message
-                        urls = re.findall(r'(https?://[^\s]+)', msg_text)
-                        if urls:
-                            # Nick hamesha bypass link last me deta hai, so we pick the last one [-1]
-                            extracted_link = urls[-1] 
-                            break
+                msg_text = reply.text or reply.caption or ""
+                
+                # Debugging ke liye history save ki
+                if not last_seen_msg:
+                    last_seen_msg = msg_text
+                
+                # 🧠 NEW FOOLPROOF LOGIC: Kya is message me humara link h aur Bypassed word h?
+                if user_text in msg_text and "Bypassed" in msg_text:
+                    urls = re.findall(r'(https?://[^\s]+)', msg_text)
+                    if urls:
+                        extracted_link = urls[-1] # Last link utha liya
+                        break
+                        
             if extracted_link:
                 break
 
@@ -107,7 +108,14 @@ async def handle_user_links(client, message: Message):
             )
             await msg.edit_text(final_text, disable_web_page_preview=True)
         else:
-            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
+            # 🔥 X-RAY VISION: Agar fail hua to yaha real problem dikhegi
+            error_text = (
+                f"❌ **Oops Cutie! Bypass failed.**\n"
+                f"(Could not find the bypassed link in the group)\n\n"
+                f"🔍 **Debug Info (Last msg seen):**\n"
+                f"`{last_seen_msg[:100]}...`"
+            )
+            await msg.edit_text(error_text)
             
     except Exception as e:
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
