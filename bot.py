@@ -39,13 +39,13 @@ async def run_cute_animation(msg):
                     await msg.edit_text(step)
                 except MessageNotModified:
                     pass
-                await asyncio.sleep(1.2) # 1.2s delay for animation
+                await asyncio.sleep(1.2)
     except asyncio.CancelledError:
-        pass # Task cancelled when link is found
+        pass # Background task ruk jayega jab link mil jayega
 
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
-    user_text = message.text
+    user_text = message.text.strip()
     
     # ---------------- 1. FORCE SUB CHECK ----------------
     if FORCE_SUB_CHANNEL:
@@ -61,7 +61,7 @@ async def handle_user_links(client, message: Message):
         except Exception:
             pass
 
-    # ---------------- 2. EXACT BYPASS LOGIC ----------------
+    # ---------------- 2. FOOLPROOF BYPASS LOGIC ----------------
     msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
     
     try:
@@ -72,31 +72,29 @@ async def handle_user_links(client, message: Message):
         anim_task = asyncio.create_task(run_cute_animation(msg))
         extracted_link = None
         
-        # Checking loop: Look for a direct reply to 'sent_msg'
-        for _ in range(30): # 30 checks (approx 15 seconds)
-            await asyncio.sleep(0.5) # Fast API check
+        # Check loop: 30 times with 0.5s wait = 15 seconds max wait
+        for _ in range(30):
+            await asyncio.sleep(0.5) 
             
-            async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=10):
-                # 🎯 SNIPER LOGIC: Is this message a direct reply to the link we just sent?
-                if reply.reply_to_message_id == sent_msg.id:
-                    msg_text = reply.text or reply.caption
+            async for history_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
+                # Sirf un messages ko dekho jo hamare link bhejne ke BAAD aaye hain
+                if history_msg.id > sent_msg.id:
+                    msg_text = history_msg.text or history_msg.caption or ""
                     
-                    if msg_text and "Bypassed Link:" in msg_text:
-                        # Extract exact bypassed link using regex to handle emojis/spaces
-                        match = re.search(r"Bypassed Link:.*?✅\s*(https?://[^\s]+)", msg_text, re.DOTALL)
-                        if match:
-                            extracted_link = match.group(1)
-                        else:
-                            # Backup logic just in case
-                            all_urls = re.findall(r'(https?://[^\s]+)', msg_text)
-                            if all_urls:
-                                extracted_link = all_urls[-1]
-                        break # Got the link!
+                    # 🎯 SIMPLE STRING MATCHING (No Flaky Reply ID Checks)
+                    if "Bypassed Link:" in msg_text:
+                        # Find all URLs in the message text
+                        all_urls = re.findall(r'(https?://[^\s]+)', msg_text)
+                        
+                        # Screenshot ke hisaab se Bypassed link humesha LAST me hota hai
+                        if all_urls:
+                            extracted_link = all_urls[-1]
+                            break 
             
             if extracted_link:
-                break # Stop checking
+                break 
                 
-        # Stop the cute animation
+        # Rok do cute animations ko
         anim_task.cancel()
 
         # ---------------- 3. FINAL OUTPUT ----------------
@@ -132,4 +130,4 @@ async def start_services():
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
-        
+    
