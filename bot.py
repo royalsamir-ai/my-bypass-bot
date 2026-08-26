@@ -51,6 +51,10 @@ async def handle_user_links(client, message: Message):
     msg = await message.reply_text("⏳ **Processing 10%... Waking up bots** 🧸")
     
     try:
+        # Userbot ki apni ID pata karo
+        my_info = await userbot.get_me()
+        my_id = my_info.id
+
         # Step 1: Send link to secret group
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
@@ -65,23 +69,21 @@ async def handle_user_links(client, message: Message):
         ]
         
         for step_text in processing_steps:
-            await asyncio.sleep(3.5) # Time for Nick to reply
+            await asyncio.sleep(4) # Wait and let Nick reply
             await msg.edit_text(step_text)
             
             # Check history
             async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                # Ensure it's a new message
-                if reply.id > sent_msg.id:
+                # Ensure it's a NEW message, and NOT sent by us (so it must be Nick)
+                if reply.id > sent_msg.id and reply.from_user and reply.from_user.id != my_id:
                     msg_text = reply.text or reply.caption
-                    if msg_text and "Bypassed" in msg_text:
-                        # Smart Extraction: Get everything AFTER the word "Bypassed"
-                        parts = msg_text.split("Bypassed")
-                        if len(parts) > 1:
-                            # Extract the raw URL
-                            urls = re.findall(r'(https?://[^\s]+)', parts[1])
-                            if urls:
-                                extracted_link = urls[0] 
-                                break
+                    if msg_text:
+                        # FOOLPROOF LOGIC: Extract ALL links from Nick's message
+                        urls = re.findall(r'(https?://[^\s]+)', msg_text)
+                        if urls:
+                            # Nick hamesha bypass link last me deta hai, so we pick the last one [-1]
+                            extracted_link = urls[-1] 
+                            break
             if extracted_link:
                 break
 
