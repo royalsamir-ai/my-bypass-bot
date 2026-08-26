@@ -39,9 +39,9 @@ async def run_cute_animation(msg):
                     await msg.edit_text(step)
                 except MessageNotModified:
                     pass
-                await asyncio.sleep(1.5) # 1.5s delay sirf animation ke liye
+                await asyncio.sleep(1.2) # 1.2s delay for animation
     except asyncio.CancelledError:
-        pass # Jaise hi link mil jayega, ye background task cancel ho jayega
+        pass # Task cancelled when link is found
 
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
@@ -61,35 +61,42 @@ async def handle_user_links(client, message: Message):
         except Exception:
             pass
 
-    # ---------------- 2. SUPER-FAST BYPASS LOGIC ----------------
+    # ---------------- 2. EXACT BYPASS LOGIC ----------------
     msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
     
     try:
+        # Userbot sends link to secret group
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
-        # Start animation in the background
+        # Start animation in background
         anim_task = asyncio.create_task(run_cute_animation(msg))
-        
         extracted_link = None
         
-        # Fast Check Loop: Check every 0.5 seconds (Max 40 times = 20 seconds wait limit)
-        for _ in range(40):
-            await asyncio.sleep(0.5) 
+        # Checking loop: Look for a direct reply to 'sent_msg'
+        for _ in range(30): # 30 checks (approx 15 seconds)
+            await asyncio.sleep(0.5) # Fast API check
             
-            async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                if reply.id > sent_msg.id:
+            async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=10):
+                # 🎯 SNIPER LOGIC: Is this message a direct reply to the link we just sent?
+                if reply.reply_to_message_id == sent_msg.id:
                     msg_text = reply.text or reply.caption
-                    if msg_text and "Bypassed" in msg_text:
-                        # Extract link from text
-                        all_urls = re.findall(r'(https?://[^\s]+)', msg_text)
-                        if all_urls:
-                            extracted_link = all_urls[-1] 
-                            break
+                    
+                    if msg_text and "Bypassed Link:" in msg_text:
+                        # Extract exact bypassed link using regex to handle emojis/spaces
+                        match = re.search(r"Bypassed Link:.*?✅\s*(https?://[^\s]+)", msg_text, re.DOTALL)
+                        if match:
+                            extracted_link = match.group(1)
+                        else:
+                            # Backup logic just in case
+                            all_urls = re.findall(r'(https?://[^\s]+)', msg_text)
+                            if all_urls:
+                                extracted_link = all_urls[-1]
+                        break # Got the link!
             
             if extracted_link:
-                break # Jaise hi link mila, fatak se loop break karo
+                break # Stop checking
                 
-        # Link milte hi background animation ko rok do
+        # Stop the cute animation
         anim_task.cancel()
 
         # ---------------- 3. FINAL OUTPUT ----------------
@@ -109,7 +116,7 @@ async def handle_user_links(client, message: Message):
             )
             await msg.edit_text(final_text, disable_web_page_preview=True)
         else:
-            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link was too slow or invalid. Try again!)")
+            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
             
     except Exception as e:
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
@@ -125,4 +132,4 @@ async def start_services():
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
-    
+        
