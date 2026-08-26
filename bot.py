@@ -25,9 +25,27 @@ FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, no_updates=True)
 
+# ---------------- BACKGROUND ANIMATION TASK ----------------
+async def run_cute_animation(msg):
+    cute_steps = [
+        "✨ **Scanning link for Cuties...** 🎀",
+        "🛡️ **Defeating Viruses & Ads...** ⚔️",
+        "💖 **Fetching your Premium Link...** 🥺"
+    ]
+    try:
+        while True:
+            for step in cute_steps:
+                try:
+                    await msg.edit_text(step)
+                except MessageNotModified:
+                    pass
+                await asyncio.sleep(1.5) # 1.5s delay sirf animation ke liye
+    except asyncio.CancelledError:
+        pass # Jaise hi link mil jayega, ye background task cancel ho jayega
+
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
-    user_text = message.text.strip()
+    user_text = message.text
     
     # ---------------- 1. FORCE SUB CHECK ----------------
     if FORCE_SUB_CHANNEL:
@@ -40,65 +58,42 @@ async def handle_user_links(client, message: Message):
                 "**Hello Cutie! 👋**\n\nTo use this premium bypass bot, you need to join our main channel first.\n\n👇 **Join the channel and send your link again!**",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]])
             )
-        except Exception as e:
-            print(f"Force Sub Error: {e}")
+        except Exception:
             pass
 
-    # ---------------- 2. CUTE PROCESSING ANIMATION & BYPASS ----------------
+    # ---------------- 2. SUPER-FAST BYPASS LOGIC ----------------
     msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
     
     try:
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
+        
+        # Start animation in the background
+        anim_task = asyncio.create_task(run_cute_animation(msg))
+        
         extracted_link = None
         
-        cute_steps = [
-            "✨ **Scanning link for Cuties...** 🎀",
-            "🛡️ **Defeating Viruses & Ads...** ⚔️",
-            "💖 **Fetching your Premium Link...** 🥺"
-        ]
-        
-        max_attempts = 15  # 15 attempts * 3 seconds = 45 seconds total wait time
-        attempt = 0
-        
-        # LOGIC FIX: http/https ko hata kar clean link banayenge taaki perfectly match ho jaye
-        clean_user_link = user_text.replace("https://", "").replace("http://", "").strip()
-        
-        while attempt < max_attempts and not extracted_link:
-            step_text = cute_steps[attempt % len(cute_steps)]
+        # Fast Check Loop: Check every 0.5 seconds (Max 40 times = 20 seconds wait limit)
+        for _ in range(40):
+            await asyncio.sleep(0.5) 
             
-            try:
-                await msg.edit_text(step_text)
-            except MessageNotModified:
-                pass  # Ignore if the text hasn't changed
-            
-            await asyncio.sleep(3) # Wait 3 seconds before checking
-            
-            # Check the last 15 messages in the secret group
-            async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=15):
-                msg_text = reply.text or reply.caption
-                
-                # NAYA LOGIC: Dekho ki Nick ke message me original link aur "Bypassed" dono hain ya nahi
-                if msg_text and "Bypassed" in msg_text and clean_user_link in msg_text:
-                    # Agar mil gaya, toh saare URLs nikal lo
-                    all_urls = re.findall(r'(https?://[^\s]+)', msg_text)
-                    if all_urls:
-                        # Nick hamesha bypass link sabse last me deta hai
-                        extracted_link = all_urls[-1] 
-                        break
+            async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
+                if reply.id > sent_msg.id:
+                    msg_text = reply.text or reply.caption
+                    if msg_text and "Bypassed" in msg_text:
+                        # Extract link from text
+                        all_urls = re.findall(r'(https?://[^\s]+)', msg_text)
+                        if all_urls:
+                            extracted_link = all_urls[-1] 
+                            break
             
             if extracted_link:
-                break
+                break # Jaise hi link mila, fatak se loop break karo
                 
-            attempt += 1
+        # Link milte hi background animation ko rok do
+        anim_task.cancel()
 
         # ---------------- 3. FINAL OUTPUT ----------------
         if extracted_link:
-            try:
-                await msg.edit_text("✅ **Magic Complete!** ✨")
-                await asyncio.sleep(1) 
-            except MessageNotModified:
-                pass
-            
             virus_count = random.randint(5, 25)
             
             final_text = (
@@ -114,11 +109,10 @@ async def handle_user_links(client, message: Message):
             )
             await msg.edit_text(final_text, disable_web_page_preview=True)
         else:
-            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
+            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link was too slow or invalid. Try again!)")
             
     except Exception as e:
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
-
 
 # ---------------- START SERVICES ----------------
 async def start_services():
