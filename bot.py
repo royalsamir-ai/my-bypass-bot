@@ -11,8 +11,8 @@ API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
-# Secret Group Variable (Supports both ID and Username)
-secret_env = os.environ.get("SECRET_GROUP_ID", "")
+# Secret Group Variable
+secret_env = os.environ.get("SECRET_GROUP_ID", "studywallahshiledfiles")
 if secret_env.lstrip('-').isdigit():
     SECRET_GROUP_ID = int(secret_env)
 else:
@@ -22,7 +22,9 @@ FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
 
 # ---------------- CLIENTS ----------------
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+
+# 🔥 BRAHMASTRA FIX: `no_updates=True` laga diya. Ab koi laal error nahi aayega!
+userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, no_updates=True)
 
 
 @bot.on_message(filters.private & filters.text)
@@ -44,7 +46,7 @@ async def handle_user_links(client, message: Message):
                 ])
             )
         except Exception as e:
-            print(f"Force Sub Error: {e}")
+            pass # Ignore faltu errors
 
     # ---------------- 2. PROCESS LINK ----------------
     msg = await message.reply_text("⏳ **Bypassing your link... Please wait!**")
@@ -59,7 +61,7 @@ async def handle_user_links(client, message: Message):
         # Fetch the reply from the secret group
         bypassed_link = None
         async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-            # Check if Nick (a bot) replied with text or a photo caption
+            # Check if a bot (Nick) replied
             if reply.from_user and reply.from_user.is_bot:
                 bypassed_link = reply.text or reply.caption
                 break
@@ -74,10 +76,11 @@ async def handle_user_links(client, message: Message):
             )
             await msg.edit_text(final_text, disable_web_page_preview=True)
         else:
-            await msg.edit_text("❌ **Oops!** Bypass failed. Please check your link or try again later.")
+            await msg.edit_text("❌ **Oops!** Bypass failed. Nick didn't reply in time or link is invalid.")
             
     except Exception as e:
-        await msg.edit_text("❌ An unexpected technical error occurred! Please contact the admin.")
+        # 🔥 AB ERROR SEEDHA TELEGRAM PAR DIKHEGA 🔥
+        await msg.edit_text(f"❌ **Code Error Aa Gaya Bhai:**\n`{e}`\n\n(Is error ka screenshot mujhe bhej!)")
         print(f"Bypass Error: {e}")
 
 
@@ -85,7 +88,7 @@ async def handle_user_links(client, message: Message):
 async def start_services():
     print("Starting Main Bot...")
     await bot.start()
-    print("Starting Background Userbot...")
+    print("Starting Background Userbot (Faltu Updates Blocked!)...")
     await userbot.start()
     
     print("🔥 SYSTEM IS FULLY READY! 🔥")
