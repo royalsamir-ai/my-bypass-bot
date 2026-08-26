@@ -41,7 +41,7 @@ async def run_cute_animation(msg):
                     pass
                 await asyncio.sleep(1.2)
     except asyncio.CancelledError:
-        pass # Background task ruk jayega jab link mil jayega
+        pass 
 
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
@@ -61,40 +61,36 @@ async def handle_user_links(client, message: Message):
         except Exception:
             pass
 
-    # ---------------- 2. FOOLPROOF BYPASS LOGIC ----------------
+    # ---------------- 2. BULLETPROOF BYPASS LOGIC ----------------
     msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
     
     try:
         # Userbot sends link to secret group
-        sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
+        await userbot.send_message(SECRET_GROUP_ID, user_text)
         
         # Start animation in background
         anim_task = asyncio.create_task(run_cute_animation(msg))
         extracted_link = None
         
-        # Check loop: 30 times with 0.5s wait = 15 seconds max wait
-        for _ in range(30):
-            await asyncio.sleep(0.5) 
+        # API ko saans lene ke liye 1 second ka gap diya hai, varna Pyrogram atak jata hai
+        for _ in range(20): # Max 20 seconds wait
+            await asyncio.sleep(1) 
             
             async for history_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                # Sirf un messages ko dekho jo hamare link bhejne ke BAAD aaye hain
-                if history_msg.id > sent_msg.id:
-                    msg_text = history_msg.text or history_msg.caption or ""
-                    
-                    # 🎯 SIMPLE STRING MATCHING (No Flaky Reply ID Checks)
-                    if "Bypassed Link:" in msg_text:
-                        # Find all URLs in the message text
-                        all_urls = re.findall(r'(https?://[^\s]+)', msg_text)
-                        
-                        # Screenshot ke hisaab se Bypassed link humesha LAST me hota hai
-                        if all_urls:
-                            extracted_link = all_urls[-1]
-                            break 
+                msg_text = history_msg.text or history_msg.caption or ""
+                
+                # 🎯 NO ID CHECK: Bas dekho text me hamara original link aur 'Bypassed' hai ya nahi
+                if "Bypassed Link:" in msg_text and user_text in msg_text:
+                    all_urls = re.findall(r'(https?://[^\s]+)', msg_text)
+                    if all_urls:
+                        # Sabse aakhiri wala url utha lo (jo bypassed hota hai)
+                        extracted_link = all_urls[-1]
+                        break 
             
             if extracted_link:
                 break 
                 
-        # Rok do cute animations ko
+        # Animation rok do
         anim_task.cancel()
 
         # ---------------- 3. FINAL OUTPUT ----------------
@@ -107,7 +103,7 @@ async def handle_user_links(client, message: Message):
                 f"✅ {user_text}\n\n"
                 f"**Shield Link :** 🛡️\n"
                 f"✅ **{extracted_link}**\n\n"
-                f"🦠 *100% Protected from {virus_count} Viruses!* 🛡️\n"
+                f"🦠 *protected from jhut aisa {virus_count} virus asa* 🛡️\n"
                 f"✨ *This is only for cuties!* 🥺\n"
                 f"━━━━━━━━━━━━━━━━━\n"
                 f"**Powered By @StudyWallahSamir** 🎀"
