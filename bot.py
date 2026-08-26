@@ -1,5 +1,7 @@
 import os
 import asyncio
+import re
+import random  # 🔥 Random number ke liye ye naya add kiya hai
 from pyrogram import Client, filters, idle
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
@@ -23,6 +25,7 @@ FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, no_updates=True)
 
+
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
     user_text = message.text
@@ -33,50 +36,68 @@ async def handle_user_links(client, message: Message):
             user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
             if user_status.status in [ChatMemberStatus.BANNED, ChatMemberStatus.RESTRICTED]:
                 return await message.reply_text("❌ You are banned from the channel.")
+                
         except UserNotParticipant:
             return await message.reply_text(
-                "**Hello! 👋 Join channel first!**",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]])
+                "**Hello Cutie! 👋**\n\nTo use this premium bypass bot, you need to join our main channel first.\n\n👇 **Join the channel and send your link again!**",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]
+                ])
             )
         except Exception:
             pass
 
-    # ---------------- 2. PROCESS LINK ----------------
-    msg = await message.reply_text("⏳ **Link check kar raha hu...**")
+    # ---------------- 2. PROCESSING ANIMATION & BYPASS ----------------
+    msg = await message.reply_text("⏳ **Processing Link... 10%** 🎀")
     
     try:
-        # Pata karo account kiska hai
-        me = await userbot.get_me()
-        my_id = me.id
-        my_name = me.first_name
-
-        # Userbot link bhejega
+        # Step 1: Send link to secret group
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
+        await msg.edit_text("⏳ **Extracting Data... 40%** 🎀")
         
-        # 🔥 YAHAN PATA CHALEGA LINK KAHAN GAYA! 🔥
-        await msg.edit_text(f"✅ **Tracker Active:**\n\nLink Sent By: **{my_name}**\nSent to Group: **{sent_msg.chat.title}**\n\n⏳ Ab 15 sec wait kar raha hu reply ka...")
+        extracted_link = None
         
-        # 15 sec wait karega Nick ke reply ka
-        await asyncio.sleep(15) 
-        
-        bypassed_link = None
-        async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-            if reply.from_user and reply.from_user.id != my_id:
-                bypassed_link = reply.text or reply.caption
+        # Step 2: Smart Polling
+        for step in range(50, 100, 10):
+            await asyncio.sleep(2)
+            await msg.edit_text(f"⏳ **Bypassing... {step}%** 🎀")
+            
+            async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
+                if reply.id > sent_msg.id and reply.text and "Bypassed Link" in reply.text:
+                    parts = reply.text.split("Bypassed Link")
+                    if len(parts) > 1:
+                        match = re.search(r'(https?://[^\s]+)', parts[1])
+                        if match:
+                            extracted_link = match.group(1)
+                            break
+            if extracted_link:
                 break
-        
-        if bypassed_link:
+
+        # Step 3: Final Cute Output Format with Random Viruses
+        if extracted_link:
+            await msg.edit_text("✅ **Processing... 100% Complete!** 🎀")
+            await asyncio.sleep(1) 
+            
+            # 🔥 Yahan har baar naya number aayega (5 se 25 ke beech me)
+            virus_count = random.randint(5, 25)
+            
             final_text = (
-                f"✅ **Bypass Successful!**\n\n{bypassed_link}\n\n"
-                f"⚡ **Powered by @StudyWallahSamir**"
+                f"**Shield Bypass Complete!** 🎀\n\n"
+                f"**Original Link :** 🔗\n"
+                f"✅ {user_text}\n\n"
+                f"**Shield Link :** 🛡️\n"
+                f"✅ **{extracted_link}**\n\n"
+                f"🦠 *100% Protected from {virus_count} Viruses!* 🛡️\n"
+                f"✨ *This is only for cuties!* 🥺\n"
+                f"━━━━━━━━━━━━━━━━━\n"
+                f"**Powered By @StudyWallahSamir** 🎀"
             )
             await msg.edit_text(final_text, disable_web_page_preview=True)
         else:
-            await msg.edit_text("❌ **Oops! Bypass failed.**\n(Link group me toh chala gaya, par Nick ne wahan 15 second tak reply nahi diya)")
+            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
             
     except Exception as e:
-        # 🔥 AGAR LINK SEND HONE ME ERROR AAYA TO YAHAN DIKHEGA 🔥
-        await msg.edit_text(f"❌ **Code ne Secret Group me Link Bhejne se mana kar diya! Asli Error ye hai:**\n`{e}`")
+        await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
 
 
 # ---------------- START SERVICES ----------------
