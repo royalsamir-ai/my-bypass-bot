@@ -11,7 +11,6 @@ API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
-# Secret Group Variable
 secret_env = os.environ.get("SECRET_GROUP_ID", "studywallahshiledfiles")
 if secret_env.lstrip('-').isdigit():
     SECRET_GROUP_ID = int(secret_env)
@@ -22,10 +21,7 @@ FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
 
 # ---------------- CLIENTS ----------------
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
-# 🔥 BRAHMASTRA FIX: `no_updates=True` laga diya. Ab koi laal error nahi aayega!
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, no_updates=True)
-
 
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
@@ -36,65 +32,59 @@ async def handle_user_links(client, message: Message):
         try:
             user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
             if user_status.status in [ChatMemberStatus.BANNED, ChatMemberStatus.RESTRICTED]:
-                return await message.reply_text("❌ You are banned from the channel. I cannot process your request.")
-                
+                return await message.reply_text("❌ You are banned from the channel.")
         except UserNotParticipant:
             return await message.reply_text(
-                "**Hello! 👋**\n\nTo use this fast link bypass bot, you need to join our main channel first.\n\n👇 **Please join the channel using the button below and send your link again!**",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]
-                ])
+                "**Hello! 👋 Join channel first!**",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]])
             )
-        except Exception as e:
-            pass # Ignore faltu errors
+        except Exception:
+            pass
 
     # ---------------- 2. PROCESS LINK ----------------
-    msg = await message.reply_text("⏳ **Bypassing your link... Please wait!**")
+    msg = await message.reply_text("⏳ **Link check kar raha hu...**")
     
     try:
-        # Userbot sends the link to the secret group
+        # Pata karo account kiska hai
+        me = await userbot.get_me()
+        my_id = me.id
+        my_name = me.first_name
+
+        # Userbot link bhejega
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
-        # Wait for Nick's reply (10 seconds)
-        await asyncio.sleep(10) 
+        # 🔥 YAHAN PATA CHALEGA LINK KAHAN GAYA! 🔥
+        await msg.edit_text(f"✅ **Tracker Active:**\n\nLink Sent By: **{my_name}**\nSent to Group: **{sent_msg.chat.title}**\n\n⏳ Ab 15 sec wait kar raha hu reply ka...")
         
-        # Fetch the reply from the secret group
+        # 15 sec wait karega Nick ke reply ka
+        await asyncio.sleep(15) 
+        
         bypassed_link = None
         async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-            # Check if a bot (Nick) replied
-            if reply.from_user and reply.from_user.is_bot:
+            if reply.from_user and reply.from_user.id != my_id:
                 bypassed_link = reply.text or reply.caption
                 break
         
-        # Final Message with Footer
         if bypassed_link:
             final_text = (
-                f"✅ **Bypass Successful!**\n\n"
-                f"{bypassed_link}\n\n"
-                f"⚡ **Powered by @StudyWallahSamir**\n"
-                f"🎁 **Want free access to paid batches? Join @studywallahsamir**"
+                f"✅ **Bypass Successful!**\n\n{bypassed_link}\n\n"
+                f"⚡ **Powered by @StudyWallahSamir**"
             )
             await msg.edit_text(final_text, disable_web_page_preview=True)
         else:
-            await msg.edit_text("❌ **Oops!** Bypass failed. Nick didn't reply in time or link is invalid.")
+            await msg.edit_text("❌ **Oops! Bypass failed.**\n(Link group me toh chala gaya, par Nick ne wahan 15 second tak reply nahi diya)")
             
     except Exception as e:
-        # 🔥 AB ERROR SEEDHA TELEGRAM PAR DIKHEGA 🔥
-        await msg.edit_text(f"❌ **Code Error Aa Gaya Bhai:**\n`{e}`\n\n(Is error ka screenshot mujhe bhej!)")
-        print(f"Bypass Error: {e}")
+        # 🔥 AGAR LINK SEND HONE ME ERROR AAYA TO YAHAN DIKHEGA 🔥
+        await msg.edit_text(f"❌ **Code ne Secret Group me Link Bhejne se mana kar diya! Asli Error ye hai:**\n`{e}`")
 
 
 # ---------------- START SERVICES ----------------
 async def start_services():
-    print("Starting Main Bot...")
     await bot.start()
-    print("Starting Background Userbot (Faltu Updates Blocked!)...")
     await userbot.start()
-    
-    print("🔥 SYSTEM IS FULLY READY! 🔥")
-    
+    print("🔥 SYSTEM READY 🔥")
     await idle()
-    
     await bot.stop()
     await userbot.stop()
 
