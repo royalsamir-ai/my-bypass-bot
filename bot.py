@@ -25,6 +25,7 @@ FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, no_updates=True)
 
+
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
     user_text = message.text
@@ -35,49 +36,58 @@ async def handle_user_links(client, message: Message):
             user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
             if user_status.status in [ChatMemberStatus.BANNED, ChatMemberStatus.RESTRICTED]:
                 return await message.reply_text("❌ You are banned from the channel.")
+                
         except UserNotParticipant:
             return await message.reply_text(
                 "**Hello Cutie! 👋**\n\nTo use this premium bypass bot, you need to join our main channel first.\n\n👇 **Join the channel and send your link again!**",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]])
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]
+                ])
             )
         except Exception:
             pass
 
-    # ---------------- 2. CUTE PROCESSING ANIMATION & BYPASS ----------------
-    msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
+    # ---------------- 2. CUTE % PROCESSING & BYPASS ----------------
+    msg = await message.reply_text("⏳ **Processing 10%... Waking up bots** 🧸")
     
     try:
+        # Step 1: Send link to secret group
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
         extracted_link = None
         
-        # Cute Animation Steps
-        cute_steps = [
-            "✨ **Scanning link for Cuties...** 🎀",
-            "🛡️ **Defeating Viruses & Ads...** ⚔️",
-            "💖 **Fetching your Premium Link...** 🥺"
+        # Step 2: percentage animation with emojis
+        processing_steps = [
+            "⏳ **Processing 30%... Scanning for Cuties** 🎀",
+            "⏳ **Processing 60%... Defeating Viruses & Ads** ⚔️",
+            "⏳ **Processing 85%... Fetching Premium Link** 🥺",
+            "⏳ **Processing 99%... Finalizing Magic** 🪄"
         ]
         
-        for step_text in cute_steps:
-            await asyncio.sleep(3) # Wait 3 seconds per step
+        for step_text in processing_steps:
+            await asyncio.sleep(3.5) # Time for Nick to reply
             await msg.edit_text(step_text)
             
+            # Check history
             async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                # 🧠 FOOLPROOF LOGIC: Find message newer than ours
+                # Ensure it's a new message
                 if reply.id > sent_msg.id:
                     msg_text = reply.text or reply.caption
                     if msg_text and "Bypassed" in msg_text:
-                        # Extract all URLs, Nick ka bypassed link hamesha LAST me hota hai
-                        all_urls = re.findall(r'(https?://[^\s]+)', msg_text)
-                        if all_urls:
-                            extracted_link = all_urls[-1] 
-                            break
+                        # Smart Extraction: Get everything AFTER the word "Bypassed"
+                        parts = msg_text.split("Bypassed")
+                        if len(parts) > 1:
+                            # Extract the raw URL
+                            urls = re.findall(r'(https?://[^\s]+)', parts[1])
+                            if urls:
+                                extracted_link = urls[0] 
+                                break
             if extracted_link:
                 break
 
-        # ---------------- 3. FINAL OUTPUT ----------------
+        # ---------------- 3. FINAL FORMATTED OUTPUT ----------------
         if extracted_link:
-            await msg.edit_text("✅ **Magic Complete!** ✨")
+            await msg.edit_text("✅ **Processing 100%... Complete!** ✨")
             await asyncio.sleep(1) 
             
             virus_count = random.randint(5, 25)
@@ -95,7 +105,7 @@ async def handle_user_links(client, message: Message):
             )
             await msg.edit_text(final_text, disable_web_page_preview=True)
         else:
-            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link was too slow or invalid. Try again!)")
+            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
             
     except Exception as e:
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
