@@ -10,7 +10,13 @@ API_ID = int(os.environ.get("API_ID", 37847572))
 API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
-SECRET_GROUP_ID = int(os.environ.get("SECRET_GROUP_ID", 0))
+
+# Secret Group Variable (Supports both ID and Username)
+secret_env = os.environ.get("SECRET_GROUP_ID", "")
+if secret_env.lstrip('-').isdigit():
+    SECRET_GROUP_ID = int(secret_env)
+else:
+    SECRET_GROUP_ID = secret_env
 
 FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
 
@@ -28,11 +34,11 @@ async def handle_user_links(client, message: Message):
         try:
             user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
             if user_status.status in [ChatMemberStatus.BANNED, ChatMemberStatus.RESTRICTED]:
-                return await message.reply_text("❌ Cutie, tum channel se banned ho.")
+                return await message.reply_text("❌ You are banned from the channel. I cannot process your request.")
                 
         except UserNotParticipant:
             return await message.reply_text(
-                "**Hey cuties! 🥺**\n\nMujhse fast link bypass karwana hai? Toh phle jaldi se humara main channel join kar lo! Join karne ke baad hi main aage process karunga na.\n\n👇 **Fast Join Main Channel (Delete in 24 hr) & Send Link Again!**",
+                "**Hello! 👋**\n\nTo use this fast link bypass bot, you need to join our main channel first.\n\n👇 **Please join the channel using the button below and send your link again!**",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]
                 ])
@@ -41,19 +47,19 @@ async def handle_user_links(client, message: Message):
             print(f"Force Sub Error: {e}")
 
     # ---------------- 2. PROCESS LINK ----------------
-    msg = await message.reply_text("⏳ **Bypassing your link cutie... Please wait!**")
+    msg = await message.reply_text("⏳ **Bypassing your link... Please wait!**")
     
     try:
-        # Userbot chupchap link ko secret group me bhejega
+        # Userbot sends the link to the secret group
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
-        # Nick ka reply aane ka wait (Humne 10 second kar diya hai taaki miss na ho)
+        # Wait for Nick's reply (10 seconds)
         await asyncio.sleep(10) 
         
-        # Secret group se reply fetch karna
+        # Fetch the reply from the secret group
         bypassed_link = None
         async for reply in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-            # Check karega ki Nick ne message diya hai (Text ya Photo caption)
+            # Check if Nick (a bot) replied with text or a photo caption
             if reply.from_user and reply.from_user.is_bot:
                 bypassed_link = reply.text or reply.caption
                 break
@@ -64,34 +70,25 @@ async def handle_user_links(client, message: Message):
                 f"✅ **Bypass Successful!**\n\n"
                 f"{bypassed_link}\n\n"
                 f"⚡ **Powered by @StudyWallahSamir**\n"
-                f"🎁 **Want paid batches free access? Join @studywallahsamir**"
+                f"🎁 **Want free access to paid batches? Join @studywallahsamir**"
             )
             await msg.edit_text(final_text, disable_web_page_preview=True)
         else:
-            await msg.edit_text("❌ **Oops cutie!** Bypass fail ho gaya. Link check karo ya thodi der baad aana.")
+            await msg.edit_text("❌ **Oops!** Bypass failed. Please check your link or try again later.")
             
     except Exception as e:
-        await msg.edit_text("❌ Aww, kuch technical error aa gaya cutie! Admin ko batao.")
+        await msg.edit_text("❌ An unexpected technical error occurred! Please contact the admin.")
         print(f"Bypass Error: {e}")
 
 
 # ---------------- START SERVICES ----------------
 async def start_services():
-    print("Main Bot Start ho raha hai...")
+    print("Starting Main Bot...")
     await bot.start()
-    print("Background Userbot Start ho raha hai...")
+    print("Starting Background Userbot...")
     await userbot.start()
     
-    print("⏳ Loading Chats into Memory (Fixing Peer ID Error)...")
-    try:
-        # Ye jaadu ki line bot ki memory refresh karegi taaki usko Secret group mil jaye
-        async for _ in userbot.get_dialogs(limit=100):
-            pass
-        print("✅ Chat Memory Loaded Successfully!")
-    except Exception as e:
-        print("Memory Load Error (Ignore if works):", e)
-
-    print("🔥 TERA SYSTEM EKDUM READY HAI! 🔥")
+    print("🔥 SYSTEM IS FULLY READY! 🔥")
     
     await idle()
     
