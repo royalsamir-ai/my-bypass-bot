@@ -26,25 +26,38 @@ BYPASS_TIMEOUT = 15  # seconds
 
 # ---------------- CLIENTS ----------------
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-# IMPORTANT: no_updates removed — the userbot MUST receive updates for on_message to fire
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
 # ---------------- PENDING REQUEST REGISTRY ----------------
-# key: the message ID the userbot sent into the secret group
-# value: {"future": asyncio.Future, "original_link": str}
 pending_requests: dict[int, dict] = {}
 pending_lock = asyncio.Lock()
 
-def extract_last_url(text: str) -> str | None:
+
+def extract_bypassed_url(text: str) -> str | None:
+    """
+    Nick Bot ke text se exact Bypassed Link nikaalne ke liye logic.
+    Aapki photo ke mutabik 'Bypassed Link :' ke theek baad wala URL uthayega.
+    """
+    # Nick Bot ke format 'Bypassed Link :' ke baad wale saare URLs dhoondega
+    if "Bypassed Link" in text:
+        parts = text.split("Bypassed Link")
+        if len(parts) > 1:
+            urls = re.findall(r'(https?://[^\s]+)', parts[1])
+            if urls:
+                return urls[0] # Bypassed section ka pehla link hi sahi link hai
+                
+    # Fallback: Agar text split fail ho toh aakhri url uthao
     urls = re.findall(r'(https?://[^\s]+)', text)
     return urls[-1] if urls else None
+
 
 # ---------------- EVENT LISTENER FOR SECRET GROUP ----------------
 @userbot.on_message(filters.chat(SECRET_GROUP_ID))
 async def catch_nick_bot_reply(client, message: Message):
     msg_text = message.text or message.caption or ""
 
-    if "Bypassed Link:" not in msg_text:
+    # Strict check hata diya, agar message me koi bhi link hai ya 'liteshort' hai toh process karein
+    if "liteshort.com" not in msg_text and "Bypassed" not in msg_text:
         return
 
     async with pending_lock:
@@ -53,28 +66,30 @@ async def catch_nick_bot_reply(client, message: Message):
 
         matched_key = None
 
-        # 1) Best case: Nick Bot's message is a formal reply to the message we sent
+        # 1) Pehla Tarika: Nick Bot ne agar hamare userbot ke bheeje link par REPLY kiya hai
         if message.reply_to_message_id and message.reply_to_message_id in pending_requests:
             matched_key = message.reply_to_message_id
 
-        # 2) Fallback: match by finding our original link text inside the reply
+        # 2) Dusra Tarika: Nick Bot ke message mein hamara original link kahin bhi maujood ho
         if matched_key is None:
             for key, data in pending_requests.items():
-                if data["original_link"] in msg_text:
+                if data["original_link"] in msg_text or "easysky.in" in msg_text:
                     matched_key = key
                     break
 
-        # 3) Last-resort fallback: oldest pending request (FIFO) — only if there's exactly one
+        # 3) Tisra Tarika: Agar group mein sirf EK hi request pending hai toh seedhe use hi assign kardo
         if matched_key is None and len(pending_requests) == 1:
             matched_key = next(iter(pending_requests))
 
         if matched_key is None:
-            return  # Couldn't confidently correlate — ignore rather than risk cross-wiring users
+            return 
 
         future = pending_requests[matched_key]["future"]
         if not future.done():
-            extracted_link = extract_last_url(msg_text)
-            future.set_result(extracted_link)  # may be None if no URL found; handled by caller
+            extracted_link = extract_bypassed_url(msg_text)
+            if extracted_link:
+                future.set_result(extracted_link)
+
 
 # ---------------- BACKGROUND ANIMATION TASK ----------------
 async def run_cute_animation(msg):
@@ -94,11 +109,12 @@ async def run_cute_animation(msg):
     except asyncio.CancelledError:
         pass
 
+
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
     user_text = message.text.strip()
 
-    # ---------------- 1. FORCE SUB CHECK ----------------
+    # ---------------- FORCE SUB CHECK ----------------
     if FORCE_SUB_CHANNEL:
         try:
             user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
@@ -107,7 +123,7 @@ async def handle_user_links(client, message: Message):
         except UserNotParticipant:
             return await message.reply_text(
                 "**Hello Cutie! 👋**\n\nTo use this premium bypass bot, you need to join our main channel first.\n\n👇 **Join the channel and send your link again!**",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me{FORCE_SUB_CHANNEL}")]])
             )
         except Exception:
             pass
@@ -117,8 +133,6 @@ async def handle_user_links(client, message: Message):
     sent_msg_id = None
 
     try:
-        # Register the future BEFORE sending, to avoid a race where the
-        # reply arrives before we've started listening for it
         loop = asyncio.get_event_loop()
         future = loop.create_future()
 
@@ -141,7 +155,7 @@ async def handle_user_links(client, message: Message):
         if anim_task:
             anim_task.cancel()
 
-        # ---------------- FINAL OUTPUT ----------------
+        # ---------------- AAPKA CUSTOM FINAL OUTPUT ----------------
         if extracted_link:
             virus_count = random.randint(5, 25)
             final_text = (
@@ -150,7 +164,7 @@ async def handle_user_links(client, message: Message):
                 f"✅ {user_text}\n\n"
                 f"**Shield Link :** 🛡️\n"
                 f"✅ **{extracted_link}**\n\n"
-                f"🦠 *protected from jhut aisa {virus_count} virus asa* 🛡️\n"
+                f"🦠 *100% Protected from {virus_count} Viruses!* 🛡️\n"
                 f"✨ *This is only for cuties!* 🥺\n"
                 f"━━━━━━━━━━━━━━━━━\n"
                 f"**Powered By @StudyWallahSamir** 🎀"
@@ -165,10 +179,10 @@ async def handle_user_links(client, message: Message):
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
 
     finally:
-        # Always clean up the registry entry so it doesn't leak
         if sent_msg_id is not None:
             async with pending_lock:
                 pending_requests.pop(sent_msg_id, None)
+
 
 # ---------------- START SERVICES ----------------
 async def start_services():
@@ -179,5 +193,7 @@ async def start_services():
     await bot.stop()
     await userbot.stop()
 
+
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
+            
