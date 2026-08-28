@@ -26,29 +26,51 @@ BYPASS_TIMEOUT = 15  # seconds
 
 # ---------------- CLIENTS ----------------
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# no_updates removed intentionally — the userbot MUST receive updates for on_message to fire
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
 # ---------------- PENDING REQUEST REGISTRY ----------------
+# key: the message ID the userbot sent into the secret group
+# value: {"future": asyncio.Future, "original_link": str}
 pending_requests: dict[int, dict] = {}
 pending_lock = asyncio.Lock()
 
 
 def extract_bypassed_url(text: str) -> str | None:
     """
-    Nick Bot ke text se exact Bypassed Link nikaalne ke liye logic.
-    Aapki photo ke mutabik 'Bypassed Link :' ke theek baad wala URL uthayega.
+    Nick Bot's message typically contains two URLs:
+      Original Link: https://original.com/xyz
+      Bypassed Link: https://liteshort.com/abc
+
+    Strategy: split the text at the word "Bypassed" (case-insensitive) and
+    take the FIRST url found in the section AFTER that split point.
+    This avoids depending on exact punctuation/quote formatting.
     """
-    # Nick Bot ke format 'Bypassed Link :' ke baad wale saare URLs dhoondega
-    if "Bypassed Link" in text:
-        parts = text.split("Bypassed Link")
-        if len(parts) > 1:
-            urls = re.findall(r'(https?://[^\s]+)', parts[1])
-            if urls:
-                return urls[0] # Bypassed section ka pehla link hi sahi link hai
-                
-    # Fallback: Agar text split fail ho toh aakhri url uthao
-    urls = re.findall(r'(https?://[^\s]+)', text)
-    return urls[-1] if urls else None
+    if not text:
+        return None
+
+    match = re.split(r'bypassed', text, maxsplit=1, flags=re.IGNORECASE)
+
+    if len(match) == 2:
+        after_bypassed = match[1]
+        urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', after_bypassed)
+        if urls:
+            return urls[0]
+
+    # Fallback: "bypassed" not found, or no URL after it — take the last url overall
+    all_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', text)
+    if all_urls:
+        return all_urls[-1]
+
+    return None
+
+
+def looks_like_bypass_reply(text: str) -> bool:
+    """Loose check — don't depend on exact 'Bypassed Link:' formatting."""
+    if not text:
+        return False
+    lowered = text.lower()
+    return "bypassed" in lowered or "liteshort.com" in lowered
 
 
 # ---------------- EVENT LISTENER FOR SECRET GROUP ----------------
@@ -56,8 +78,7 @@ def extract_bypassed_url(text: str) -> str | None:
 async def catch_nick_bot_reply(client, message: Message):
     msg_text = message.text or message.caption or ""
 
-    # Strict check hata diya, agar message me koi bhi link hai ya 'liteshort' hai toh process karein
-    if "liteshort.com" not in msg_text and "Bypassed" not in msg_text:
+    if not looks_like_bypass_reply(msg_text):
         return
 
     async with pending_lock:
@@ -66,29 +87,28 @@ async def catch_nick_bot_reply(client, message: Message):
 
         matched_key = None
 
-        # 1) Pehla Tarika: Nick Bot ne agar hamare userbot ke bheeje link par REPLY kiya hai
+        # 1) Best case: Nick Bot's message is a formal reply to our sent message
         if message.reply_to_message_id and message.reply_to_message_id in pending_requests:
             matched_key = message.reply_to_message_id
 
-        # 2) Dusra Tarika: Nick Bot ke message mein hamara original link kahin bhi maujood ho
+        # 2) Fallback: match by finding our original link text inside the reply
         if matched_key is None:
             for key, data in pending_requests.items():
-                if data["original_link"] in msg_text or "easysky.in" in msg_text:
+                if data["original_link"] in msg_text:
                     matched_key = key
                     break
 
-        # 3) Tisra Tarika: Agar group mein sirf EK hi request pending hai toh seedhe use hi assign kardo
+        # 3) Last-resort fallback: only one request pending, assume it's that one
         if matched_key is None and len(pending_requests) == 1:
             matched_key = next(iter(pending_requests))
 
         if matched_key is None:
-            return 
+            return  # Can't confidently correlate — ignore rather than risk cross-wiring users
 
         future = pending_requests[matched_key]["future"]
         if not future.done():
             extracted_link = extract_bypassed_url(msg_text)
-            if extracted_link:
-                future.set_result(extracted_link)
+            future.set_result(extracted_link)
 
 
 # ---------------- BACKGROUND ANIMATION TASK ----------------
@@ -114,7 +134,7 @@ async def run_cute_animation(msg):
 async def handle_user_links(client, message: Message):
     user_text = message.text.strip()
 
-    # ---------------- FORCE SUB CHECK ----------------
+    # ---------------- 1. FORCE SUB CHECK ----------------
     if FORCE_SUB_CHANNEL:
         try:
             user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
@@ -123,7 +143,7 @@ async def handle_user_links(client, message: Message):
         except UserNotParticipant:
             return await message.reply_text(
                 "**Hello Cutie! 👋**\n\nTo use this premium bypass bot, you need to join our main channel first.\n\n👇 **Join the channel and send your link again!**",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me{FORCE_SUB_CHANNEL}")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]])
             )
         except Exception:
             pass
@@ -155,7 +175,7 @@ async def handle_user_links(client, message: Message):
         if anim_task:
             anim_task.cancel()
 
-        # ---------------- AAPKA CUSTOM FINAL OUTPUT ----------------
+        # ---------------- FINAL OUTPUT ----------------
         if extracted_link:
             virus_count = random.randint(5, 25)
             final_text = (
@@ -196,4 +216,3 @@ async def start_services():
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
-            
