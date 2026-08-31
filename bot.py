@@ -26,26 +26,15 @@ BYPASS_TIMEOUT = 15  # seconds
 
 # ---------------- CLIENTS ----------------
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-# no_updates removed intentionally — the userbot MUST receive updates for on_message to fire
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
 # ---------------- PENDING REQUEST REGISTRY ----------------
-# key: the message ID the userbot sent into the secret group
-# value: {"future": asyncio.Future, "original_link": str}
-pending_requests: dict[int, dict] = {}
+# key: string (original link ya random index) ya int (message ID)
+pending_requests: dict = {}
 pending_lock = asyncio.Lock()
 
 
 def extract_bypassed_url(text: str) -> str | None:
-    """
-    Nick Bot's message typically contains two URLs:
-      Original Link: https://original.com/xyz
-      Bypassed Link: https://liteshort.com/abc
-
-    Strategy: split the text at the word "Bypassed" (case-insensitive) and
-    take the FIRST url found in the section AFTER that split point.
-    This avoids depending on exact punctuation/quote formatting.
-    """
     if not text:
         return None
 
@@ -57,7 +46,6 @@ def extract_bypassed_url(text: str) -> str | None:
         if urls:
             return urls[0]
 
-    # Fallback: "bypassed" not found, or no URL after it — take the last url overall
     all_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', text)
     if all_urls:
         return all_urls[-1]
@@ -66,11 +54,10 @@ def extract_bypassed_url(text: str) -> str | None:
 
 
 def looks_like_bypass_reply(text: str) -> bool:
-    """Loose check — don't depend on exact 'Bypassed Link:' formatting."""
     if not text:
         return False
     lowered = text.lower()
-    return "bypassed" in lowered or "liteshort.com" in lowered
+    return "bypassed" in lowered or "liteshort.com" in lowered or "https://" in lowered
 
 
 # ---------------- EVENT LISTENER FOR SECRET GROUP ----------------
@@ -87,23 +74,29 @@ async def catch_nick_bot_reply(client, message: Message):
 
         matched_key = None
 
-        # 1) Best case: Nick Bot's message is a formal reply to our sent message
-        if message.reply_to_message_id and message.reply_to_message_id in pending_requests:
-            matched_key = message.reply_to_message_id
+        # 1) Pehle check karein agar Nick Bot hamare text link ko reply me contain karta hai
+        for key, data in pending_requests.items():
+            if data["original_link"] in msg_text:
+                matched_key = key
+                break
 
-        # 2) Fallback: match by finding our original link text inside the reply
-        if matched_key is None:
-            for key, data in pending_requests.items():
-                if data["original_link"] in msg_text:
-                    matched_key = key
-                    break
+        # 2) Fallback: Nick Bot formal reply option use kar raha ho
+        if matched_key is None and message.reply_to_message_id:
+            if message.reply_to_message_id in pending_requests:
+                matched_key = message.reply_to_message_id
+            # Agar humne custom string se save kiya tha, toh sent_msg_id match karo
+            else:
+                for key, data in pending_requests.items():
+                    if data.get("sent_msg_id") == message.reply_to_message_id:
+                        matched_key = key
+                        break
 
-        # 3) Last-resort fallback: only one request pending, assume it's that one
+        # 3) Last-resort fallback: keval 1 request pending hai toh wahi maan lo
         if matched_key is None and len(pending_requests) == 1:
             matched_key = next(iter(pending_requests))
 
         if matched_key is None:
-            return  # Can't confidently correlate — ignore rather than risk cross-wiring users
+            return  
 
         future = pending_requests[matched_key]["future"]
         if not future.done():
@@ -143,27 +136,34 @@ async def handle_user_links(client, message: Message):
         except UserNotParticipant:
             return await message.reply_text(
                 "**Hello Cutie! 👋**\n\nTo use this premium bypass bot, you need to join our main channel first.\n\n👇 **Join the channel and send your link again!**",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me{FORCE_SUB_CHANNEL}")]])
             )
         except Exception:
             pass
 
     msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
     anim_task = None
-    sent_msg_id = None
+    tracking_key = user_text  # Link ko hi tracking key bana diya race condition se bachne ke liye
 
     try:
         loop = asyncio.get_event_loop()
         future = loop.create_future()
 
-        sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
-        sent_msg_id = sent_msg.id
-
+        # FIX: Message bejne se PEHLE hi registry me entry daal do!!
         async with pending_lock:
-            pending_requests[sent_msg_id] = {
+            pending_requests[tracking_key] = {
                 "future": future,
                 "original_link": user_text,
+                "sent_msg_id": None
             }
+
+        # Ab message send karo group me
+        sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
+        
+        # Message ID ko save kar lo agar fallback me kaam aaye
+        async with pending_lock:
+            if tracking_key in pending_requests:
+                pending_requests[tracking_key]["sent_msg_id"] = sent_msg.id
 
         anim_task = asyncio.create_task(run_cute_animation(msg))
 
@@ -199,9 +199,8 @@ async def handle_user_links(client, message: Message):
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
 
     finally:
-        if sent_msg_id is not None:
-            async with pending_lock:
-                pending_requests.pop(sent_msg_id, None)
+        async with pending_lock:
+            pending_requests.pop(tracking_key, None)
 
 
 # ---------------- START SERVICES ----------------
