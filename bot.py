@@ -25,11 +25,51 @@ FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
+# ---------------- REGISTRY ----------------
+pending_requests: dict[str, dict] = {}
+pending_lock = asyncio.Lock()
+
+# ---------------- EVENT LISTENER (NEW + EDITED MESSAGES) ----------------
+@userbot.on_message()
+@userbot.on_edited_message()
+async def catch_nick_bot_reply(client, message: Message):
+    text = message.text or message.caption or ""
+
+    # Agar Nick Bot ka bypass message nahi hai, toh ignore karo
+    if "Bypassed" not in text and "✅" not in text:
+        return
+
+    matched_future = None
+
+    # ⏳ 0-SECOND RACE CONDITION FIX ⏳
+    # Agar reply bohot fast aaya hai, toh bot 15 baar (3 seconds tak) list dobara check karega
+    for _ in range(15): 
+        async with pending_lock:
+            for key, data in pending_requests.items():
+                # 1. Check by Reply ID (Sabse accurate)
+                if message.reply_to_message_id and data.get("sent_msg_id") == message.reply_to_message_id:
+                    matched_future = data["future"]
+                    break
+                # 2. Check by Original Link (Backup)
+                elif data["original_link"] in text:
+                    matched_future = data["future"]
+                    break
+        
+        if matched_future:
+            break
+        await asyncio.sleep(0.2) # Chota sa wait taaki background task update ho sake
+
+    # Agar future mil gaya, toh link nikal kar wapas bhej do
+    if matched_future and not matched_future.done():
+        urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', text)
+        if urls:
+            matched_future.set_result(urls[-1])
+
+# ---------------- MAIN BOT HANDLER ----------------
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
     user_text = message.text.strip()
 
-    # ---------------- 1. FORCE SUB CHECK ----------------
     if FORCE_SUB_CHANNEL:
         try:
             user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
@@ -43,38 +83,36 @@ async def handle_user_links(client, message: Message):
         except Exception:
             pass
 
-    # 🔥 Ek single static message, taaki Telegram Spam limit na lagaye
     msg = await message.reply_text("⚡ **Bypassing in milliseconds...** 🚀")
+    task_id = str(random.randint(100000, 999999))
 
     try:
-        # Userbot bhejta hai link secret group mein
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+
+        # Request register karo bina message ID ke
+        async with pending_lock:
+            pending_requests[task_id] = {
+                "future": future,
+                "original_link": user_text,
+                "sent_msg_id": None
+            }
+
+        # Userbot message bhejta hai
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
-        extracted_link = None
+        
+        # Message ID save hoti hai (Jisme thoda time lagta hai)
+        async with pending_lock:
+            if task_id in pending_requests:
+                pending_requests[task_id]["sent_msg_id"] = sent_msg.id
 
-        # ---------------- 2. SUPER FAST HISTORY CHECKER ----------------
-        # Har 0.5 second me check karega, maximum 30 baar (15 seconds total)
-        for _ in range(30):
-            await asyncio.sleep(0.5) 
-            
-            async for history_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                # Sirf un messages ko dekho jo hamare bheje gaye message ke BAAD aaye hain
-                if history_msg.id > sent_msg.id:
-                    # Confirm karo ki ye hamare hi link ka reply hai
-                    if history_msg.reply_to_message_id == sent_msg.id or user_text in (history_msg.text or ""):
-                        text = history_msg.text or history_msg.caption or ""
-                        
-                        # Agar Bypass successful ho gaya hai
-                        if "Bypassed" in text or "✅" in text:
-                            urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', text)
-                            if urls:
-                                extracted_link = urls[-1] # Hamesha aakhiri wala link uthayega
-                                break
-            
-            # Jaise hi link mila, loop turant break kar do!
-            if extracted_link:
-                break
+        try:
+            # Sirf wait karega, jaise hi Nick bot reply dega, ye complete ho jayega
+            extracted_link = await asyncio.wait_for(future, timeout=15)
+        except asyncio.TimeoutError:
+            extracted_link = None
 
-        # ---------------- 3. FINAL OUTPUT ----------------
+        # ---------------- FINAL OUTPUT ----------------
         if extracted_link:
             virus_count = random.randint(5, 25)
             final_text = (
@@ -94,6 +132,10 @@ async def handle_user_links(client, message: Message):
 
     except Exception as e:
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
+
+    finally:
+        async with pending_lock:
+            pending_requests.pop(task_id, None)
 
 
 # ---------------- START SERVICES ----------------
