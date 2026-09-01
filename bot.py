@@ -21,7 +21,6 @@ else:
 
 FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
 
-# Timeout for waiting on Nick Bot's reply
 BYPASS_TIMEOUT = 15  # seconds
 
 # ---------------- CLIENTS ----------------
@@ -29,35 +28,29 @@ bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
 # ---------------- PENDING REQUEST REGISTRY ----------------
-# key: string (original link ya random index) ya int (message ID)
-pending_requests: dict = {}
+pending_requests: dict[str, dict] = {}
 pending_lock = asyncio.Lock()
 
 
 def extract_bypassed_url(text: str) -> str | None:
     if not text:
         return None
-
     match = re.split(r'bypassed', text, maxsplit=1, flags=re.IGNORECASE)
-
     if len(match) == 2:
         after_bypassed = match[1]
         urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', after_bypassed)
         if urls:
             return urls[0]
-
     all_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', text)
     if all_urls:
         return all_urls[-1]
-
     return None
-
 
 def looks_like_bypass_reply(text: str) -> bool:
     if not text:
         return False
     lowered = text.lower()
-    return "bypassed" in lowered or "liteshort.com" in lowered or "https://" in lowered
+    return "bypassed" in lowered or "✅" in lowered
 
 
 # ---------------- EVENT LISTENER FOR SECRET GROUP ----------------
@@ -74,24 +67,17 @@ async def catch_nick_bot_reply(client, message: Message):
 
         matched_key = None
 
-        # 1) Pehle check karein agar Nick Bot hamare text link ko reply me contain karta hai
+        # 🎯 SNIPER MATCHING: Check immediately even if Nick bot replies in 0 seconds
         for key, data in pending_requests.items():
+            # 1. Match by Original Link (Solves the 0-second race condition)
             if data["original_link"] in msg_text:
                 matched_key = key
                 break
+            # 2. Match by formal Reply ID (Fallback)
+            elif data["sent_msg_id"] and message.reply_to_message_id == data["sent_msg_id"]:
+                matched_key = key
+                break
 
-        # 2) Fallback: Nick Bot formal reply option use kar raha ho
-        if matched_key is None and message.reply_to_message_id:
-            if message.reply_to_message_id in pending_requests:
-                matched_key = message.reply_to_message_id
-            # Agar humne custom string se save kiya tha, toh sent_msg_id match karo
-            else:
-                for key, data in pending_requests.items():
-                    if data.get("sent_msg_id") == message.reply_to_message_id:
-                        matched_key = key
-                        break
-
-        # 3) Last-resort fallback: keval 1 request pending hai toh wahi maan lo
         if matched_key is None and len(pending_requests) == 1:
             matched_key = next(iter(pending_requests))
 
@@ -136,34 +122,34 @@ async def handle_user_links(client, message: Message):
         except UserNotParticipant:
             return await message.reply_text(
                 "**Hello Cutie! 👋**\n\nTo use this premium bypass bot, you need to join our main channel first.\n\n👇 **Join the channel and send your link again!**",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me{FORCE_SUB_CHANNEL}")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]])
             )
         except Exception:
             pass
 
     msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
     anim_task = None
-    tracking_key = user_text  # Link ko hi tracking key bana diya race condition se bachne ke liye
+    task_id = str(random.randint(100000, 999999)) # Unique ID to track request
 
     try:
         loop = asyncio.get_event_loop()
         future = loop.create_future()
 
-        # FIX: Message bejne se PEHLE hi registry me entry daal do!!
+        # 🔥 THE FIX: Pre-register the request BEFORE sending the message
+        # This guarantees we will catch 0-second replies!
         async with pending_lock:
-            pending_requests[tracking_key] = {
+            pending_requests[task_id] = {
                 "future": future,
                 "original_link": user_text,
-                "sent_msg_id": None
+                "sent_msg_id": None # Will update right after sending
             }
 
-        # Ab message send karo group me
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
-        # Message ID ko save kar lo agar fallback me kaam aaye
+        # Update with message ID in case we need it for fallback
         async with pending_lock:
-            if tracking_key in pending_requests:
-                pending_requests[tracking_key]["sent_msg_id"] = sent_msg.id
+            if task_id in pending_requests:
+                pending_requests[task_id]["sent_msg_id"] = sent_msg.id
 
         anim_task = asyncio.create_task(run_cute_animation(msg))
 
@@ -199,8 +185,9 @@ async def handle_user_links(client, message: Message):
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
 
     finally:
+        # Cleanup
         async with pending_lock:
-            pending_requests.pop(tracking_key, None)
+            pending_requests.pop(task_id, None)
 
 
 # ---------------- START SERVICES ----------------
@@ -215,3 +202,4 @@ async def start_services():
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
+    
