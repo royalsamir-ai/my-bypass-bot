@@ -31,34 +31,12 @@ userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_s
 pending_requests: dict[str, dict] = {}
 pending_lock = asyncio.Lock()
 
-
-def extract_bypassed_url(text: str) -> str | None:
-    if not text:
-        return None
-    match = re.split(r'bypassed', text, maxsplit=1, flags=re.IGNORECASE)
-    if len(match) == 2:
-        after_bypassed = match[1]
-        urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', after_bypassed)
-        if urls:
-            return urls[0]
-    all_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', text)
-    if all_urls:
-        return all_urls[-1]
-    return None
-
-def looks_like_bypass_reply(text: str) -> bool:
-    if not text:
-        return False
-    lowered = text.lower()
-    return "bypassed" in lowered or "✅" in lowered
-
-
 # ---------------- EVENT LISTENER FOR SECRET GROUP ----------------
-@userbot.on_message(filters.chat(SECRET_GROUP_ID))
+@userbot.on_message()
 async def catch_nick_bot_reply(client, message: Message):
     msg_text = message.text or message.caption or ""
 
-    if not looks_like_bypass_reply(msg_text):
+    if "Bypassed Link" not in msg_text and "Time Taken" not in msg_text:
         return
 
     async with pending_lock:
@@ -66,28 +44,24 @@ async def catch_nick_bot_reply(client, message: Message):
             return
 
         matched_key = None
-
-        # 🎯 SNIPER MATCHING: Check immediately even if Nick bot replies in 0 seconds
+        # Link match karta hai instantly
         for key, data in pending_requests.items():
-            # 1. Match by Original Link (Solves the 0-second race condition)
             if data["original_link"] in msg_text:
                 matched_key = key
                 break
-            # 2. Match by formal Reply ID (Fallback)
-            elif data["sent_msg_id"] and message.reply_to_message_id == data["sent_msg_id"]:
-                matched_key = key
-                break
-
-        if matched_key is None and len(pending_requests) == 1:
-            matched_key = next(iter(pending_requests))
 
         if matched_key is None:
             return  
 
         future = pending_requests[matched_key]["future"]
         if not future.done():
-            extracted_link = extract_bypassed_url(msg_text)
-            future.set_result(extracted_link)
+            # Aakhri link uthata hai jo hamesha bypassed hota hai
+            all_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', msg_text)
+            if all_urls:
+                extracted_link = all_urls[-1]
+                future.set_result(extracted_link)
+            else:
+                future.set_result(None)
 
 
 # ---------------- BACKGROUND ANIMATION TASK ----------------
@@ -98,15 +72,19 @@ async def run_cute_animation(msg):
         "💖 **Fetching your Premium Link...** 🥺"
     ]
     try:
+        # Loop chalta rahega jab tak Nick bot reply na de de
         while True:
             for step in cute_steps:
                 try:
                     await msg.edit_text(step)
                 except MessageNotModified:
                     pass
-                await asyncio.sleep(1.2)
+                except Exception:
+                    pass
+                # Telegram API block na kare isliye 1.5s ka gap, par link milte hi cancel ho jayega
+                await asyncio.sleep(1.5) 
     except asyncio.CancelledError:
-        pass
+        pass # Jaise hi link milega, ye task yahan aakar chup chap band ho jayega
 
 
 @bot.on_message(filters.private & filters.text)
@@ -129,35 +107,33 @@ async def handle_user_links(client, message: Message):
 
     msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
     anim_task = None
-    task_id = str(random.randint(100000, 999999)) # Unique ID to track request
+    task_id = str(random.randint(100000, 999999))
 
     try:
         loop = asyncio.get_event_loop()
         future = loop.create_future()
 
-        # 🔥 THE FIX: Pre-register the request BEFORE sending the message
-        # This guarantees we will catch 0-second replies!
+        # Bot pehle hi net bicha leta hai Nick bot ka reply catch karne ke liye
         async with pending_lock:
             pending_requests[task_id] = {
                 "future": future,
                 "original_link": user_text,
-                "sent_msg_id": None # Will update right after sending
             }
 
-        sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
+        # Userbot message bhejta hai
+        await userbot.send_message(SECRET_GROUP_ID, user_text)
         
-        # Update with message ID in case we need it for fallback
-        async with pending_lock:
-            if task_id in pending_requests:
-                pending_requests[task_id]["sent_msg_id"] = sent_msg.id
-
+        # Animation task start ho jata hai
         anim_task = asyncio.create_task(run_cute_animation(msg))
 
         try:
+            # ⏳ MAIN LOGIC: Yahan bot wait kar raha hai
+            # Agar 0.2s me aaya, toh yahi 0.2s me aage badh jayega
             extracted_link = await asyncio.wait_for(future, timeout=BYPASS_TIMEOUT)
         except asyncio.TimeoutError:
             extracted_link = None
 
+        # 🔥 THE KILL SWITCH: Yahan par animation task turant cancel/kill ho jata hai!
         if anim_task:
             anim_task.cancel()
 
@@ -185,7 +161,6 @@ async def handle_user_links(client, message: Message):
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
 
     finally:
-        # Cleanup
         async with pending_lock:
             pending_requests.pop(task_id, None)
 
@@ -202,4 +177,3 @@ async def start_services():
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
-    
