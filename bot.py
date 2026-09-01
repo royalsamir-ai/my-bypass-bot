@@ -1,140 +1,196 @@
+import os
 import asyncio
 import re
+import random
 from pyrogram import Client, filters, idle
-from pyrogram.types import Message
-from pyrogram.errors import FloodWait
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.errors import UserNotParticipant, MessageNotModified
+from pyrogram.enums import ChatMemberStatus
 
-# --- CONFIGURATION ---
-API_ID = 1234567  # Apna API ID dalo
-API_HASH = "your_api_hash"
-BOT_TOKEN = "your_bot_token"
-SESSION_STRING = "your_userbot_session_string"
+# ---------------- VARIABLES ----------------
+API_ID = int(os.environ.get("API_ID", 37847572))
+API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
-SECRET_GROUP_ID = -1001234567890  # Apna Secret Group ID dalo
-NICK_BOT_USERNAME = "Nick_Bypass_Bot"
+secret_env = os.environ.get("SECRET_GROUP_ID", "studywallahshiledfiles")
+if str(secret_env).lstrip('-').isdigit():
+    SECRET_GROUP_ID = int(secret_env)
+else:
+    SECRET_GROUP_ID = secret_env
 
-# Clients initialize karo
-app = Client("main_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-userbot = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
 
-# Yeh dictionary Race Condition roki gi (Message ID -> asyncio.Future)
-pending_requests = {}
+BYPASS_TIMEOUT = 15  # seconds
 
-def extract_bypassed_link(text: str):
-    """
-    Image 1000022784.png ke hisaab se Nick Bot ka format parse karega.
-    Dhundta hai: 'Bypassed Link: \n ✅ [URL]'
-    """
-    if not text:
-        return None
-    match = re.search(r"Bypassed Link:.*?\n\s*✅\s*(https?://[^\s]+)", text, re.IGNORECASE | re.DOTALL)
-    if match:
-        return match.group(1)
-    return None
+# ---------------- CLIENTS ----------------
+bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-# ==========================================
-# ENGINE 1: LIVE LISTENERS (Fastest)
-# ==========================================
-@userbot.on_message(filters.chat(SECRET_GROUP_ID) & filters.reply)
-async def userbot_message_listener(client, message: Message):
-    if not message.from_user or message.from_user.username != NICK_BOT_USERNAME:
+# ---------------- PENDING REQUEST REGISTRY ----------------
+pending_requests: dict[str, dict] = {}
+pending_lock = asyncio.Lock()
+
+# ---------------- ENGINE 1: LIVE EVENT LISTENER (NEW + EDITED) ----------------
+# 🔥 YAHAN HAI ASLI MAGIC! Ab ye dono messages ko pakdega
+@userbot.on_message()
+@userbot.on_edited_message()
+async def catch_nick_bot_reply(client, message: Message):
+    msg_text = message.text or message.caption or ""
+
+    if "Bypassed" not in msg_text and "✅" not in msg_text:
         return
-    
-    replied_to_id = message.reply_to_message_id
-    if replied_to_id in pending_requests:
-        future = pending_requests[replied_to_id]
-        extracted_link = extract_bypassed_link(message.text)
-        
-        # Agar link mil gaya aur future abhi pending hai, toh resolve kardo
-        if extracted_link and not future.done():
-            future.set_result(extracted_link)
+
+    async with pending_lock:
+        if not pending_requests:
+            return
+
+        matched_key = None
+        for key, data in pending_requests.items():
+            if data["original_link"] in msg_text:
+                matched_key = key
+                break
+
+        if matched_key is None:
+            return  
+
+        future = pending_requests[matched_key]["future"]
+        if not future.done():
+            all_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', msg_text)
+            if all_urls:
+                future.set_result(all_urls[-1])
 
 
-@userbot.on_edited_message(filters.chat(SECRET_GROUP_ID) & filters.reply)
-async def userbot_edit_listener(client, message: Message):
-    # Same logic as message listener, catching those 0-second fast edits
-    if not message.from_user or message.from_user.username != NICK_BOT_USERNAME:
-        return
-    
-    replied_to_id = message.reply_to_message_id
-    if replied_to_id in pending_requests:
-        future = pending_requests[replied_to_id]
-        extracted_link = extract_bypassed_link(message.text)
-        
-        if extracted_link and not future.done():
-            future.set_result(extracted_link)
-
-
-# ==========================================
-# MAIN BOT LOGIC & ENGINE 2 (Fallback)
-# ==========================================
-@app.on_message(filters.private & filters.regex(r"https?://"))
-async def handle_user_link(client, message: Message):
-    # STATIC Message: Animation hata di gayi hai taki FloodWait na aaye
-    status_msg = await message.reply_text("✨ Processing your link... Please wait.")
-    
+# ---------------- BACKGROUND ANIMATION TASK ----------------
+async def run_cute_animation(msg):
+    cute_steps = [
+        "✨ **Scanning link for Cuties...** 🎀",
+        "🛡️ **Defeating Viruses & Ads...** ⚔️",
+        "💖 **Fetching your Premium Link...** 🥺"
+    ]
     try:
-        # Step 1: Userbot se link secret group mein bhejo
-        sent_msg = await userbot.send_message(SECRET_GROUP_ID, message.text)
-    except FloodWait as e:
-        await status_msg.edit_text(f"❌ Rate limit hit. Please try after {e.value} seconds.")
-        return
-    except Exception as e:
-        await status_msg.edit_text("❌ Failed to forward to processing group.")
-        return
+        await asyncio.sleep(0.5) 
+        while True:
+            for step in cute_steps:
+                try:
+                    await msg.edit_text(step)
+                except MessageNotModified:
+                    pass
+                except Exception:
+                    pass
+                await asyncio.sleep(1.2)
+    except asyncio.CancelledError:
+        pass
 
-    # Step 2: Future create aur pre-register karo (Race condition solved)
-    loop = asyncio.get_running_loop()
-    future = loop.create_future()
-    pending_requests[sent_msg.id] = future
 
-    # Step 3: ENGINE 2 - Background Polling Task (WebSocket drop fix)
-    async def poll_fallback(msg_id, fut):
-        for _ in range(10):  # 15-20 sec tak poll karega (every 2 seconds)
-            await asyncio.sleep(2)
-            if fut.done():
-                return
-            try:
-                # Group ki history check karo just in case event miss ho gaya ho
-                async for hist_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                    if hist_msg.reply_to_message_id == msg_id and hist_msg.from_user and hist_msg.from_user.username == NICK_BOT_USERNAME:
-                        extracted = extract_bypassed_link(hist_msg.text)
-                        if extracted and not fut.done():
-                            fut.set_result(extracted)
-                            return
-            except Exception:
-                pass # Polling mein error aaye toh ignore karo, live listener pe rely karenge
-                
-        if not fut.done():
-            fut.set_exception(TimeoutError("Timeout"))
+@bot.on_message(filters.private & filters.text)
+async def handle_user_links(client, message: Message):
+    user_text = message.text.strip()
 
-    # Polling task ko background mein start kar do
-    polling_task = asyncio.create_task(poll_fallback(sent_msg.id, future))
+    # ---------------- 1. FORCE SUB CHECK ----------------
+    if FORCE_SUB_CHANNEL:
+        try:
+            user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
+            if user_status.status in [ChatMemberStatus.BANNED, ChatMemberStatus.RESTRICTED]:
+                return await message.reply_text("❌ You are banned from the channel.")
+        except UserNotParticipant:
+            return await message.reply_text(
+                "**Hello Cutie! 👋**\n\nTo use this premium bypass bot, you need to join our main channel first.\n\n👇 **Join the channel and send your link again!**",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]])
+            )
+        except Exception:
+            pass
+
+    msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
+    task_id = str(random.randint(100000, 999999))
+    
+    anim_task = None
+    poller_task = None
 
     try:
-        # Dono engines me se jo bhi pehle URL laaye, uska wait karo (Max wait: 20 seconds)
-        bypassed_link = await asyncio.wait_for(future, timeout=20.0)
-        await status_msg.edit_text(f"✅ **Bypass Successful!**\n\n🔗 **Bypassed Link:** {bypassed_link}", disable_web_page_preview=True)
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+
+        async with pending_lock:
+            pending_requests[task_id] = {
+                "future": future,
+                "original_link": user_text,
+            }
+
+        # Userbot bhejta hai message
+        sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
-    except TimeoutError:
-        await status_msg.edit_text("❌ Oops Cutie! Bypass failed. (Link took too long or format was wrong. Try again!)")
+        # ---------------- ENGINE 2: ACTIVE BACKUP POLLER ----------------
+        async def backup_poller():
+            for _ in range(15):
+                await asyncio.sleep(1)
+                if future.done():
+                    return
+                try:
+                    # Poller ko history check karne ka kaam diya hai, as a backup
+                    async for history_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
+                        if history_msg.reply_to_message_id == sent_msg.id:
+                            hist_text = history_msg.text or history_msg.caption or ""
+                            if "Bypassed" in hist_text or "✅" in hist_text:
+                                urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', hist_text)
+                                if urls and not future.done():
+                                    future.set_result(urls[-1])
+                                    return
+                except Exception:
+                    pass
+
+        poller_task = asyncio.create_task(backup_poller())
+        anim_task = asyncio.create_task(run_cute_animation(msg))
+
+        try:
+            extracted_link = await asyncio.wait_for(future, timeout=BYPASS_TIMEOUT)
+        except asyncio.TimeoutError:
+            extracted_link = None
+
+        if anim_task:
+            anim_task.cancel()
+        if poller_task:
+            poller_task.cancel()
+
+        # ---------------- FINAL OUTPUT ----------------
+        if extracted_link:
+            virus_count = random.randint(5, 25)
+            final_text = (
+                f"**Shield Bypass Complete!** 🎀\n\n"
+                f"**Original Link :** 🔗\n"
+                f"✅ {user_text}\n\n"
+                f"**Shield Link :** 🛡️\n"
+                f"✅ **{extracted_link}**\n\n"
+                f"🦠 *100% Protected from {virus_count} Viruses!* 🛡️\n"
+                f"✨ *This is only for cuties!* 🥺\n"
+                f"━━━━━━━━━━━━━━━━━\n"
+                f"**Powered By @StudyWallahSamir** 🎀"
+            )
+            await msg.edit_text(final_text, disable_web_page_preview=True)
+        else:
+            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
+
     except Exception as e:
-        await status_msg.edit_text("❌ An unexpected error occurred.")
+        if anim_task:
+            anim_task.cancel()
+        if poller_task:
+            poller_task.cancel()
+        await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
+
     finally:
-        # Cleanup: Dictionary se memory leak na ho
-        if sent_msg.id in pending_requests:
-            del pending_requests[sent_msg.id]
-        # Background task ko kill kardo
-        polling_task.cancel()
+        async with pending_lock:
+            pending_requests.pop(task_id, None)
 
-# --- START CLIENTS ---
-async def main():
-    await app.start()
+
+# ---------------- START SERVICES ----------------
+async def start_services():
+    await bot.start()
     await userbot.start()
-    print("🤖 Both Main Bot and Userbot Started Successfully!")
+    print("🔥 SYSTEM READY 🔥")
     await idle()
-    await app.stop()
+    await bot.stop()
     await userbot.stop()
 
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.get_event_loop().run_until_complete(start_services())
