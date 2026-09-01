@@ -31,12 +31,14 @@ userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_s
 pending_requests: dict[str, dict] = {}
 pending_lock = asyncio.Lock()
 
-# ---------------- EVENT LISTENER FOR SECRET GROUP ----------------
+# ---------------- ENGINE 1: LIVE EVENT LISTENER (NEW + EDITED) ----------------
+# 🔥 YAHAN HAI ASLI MAGIC! Ab ye dono messages ko pakdega
 @userbot.on_message()
+@userbot.on_edited_message()
 async def catch_nick_bot_reply(client, message: Message):
     msg_text = message.text or message.caption or ""
 
-    if "Bypassed Link" not in msg_text and "Time Taken" not in msg_text:
+    if "Bypassed" not in msg_text and "✅" not in msg_text:
         return
 
     async with pending_lock:
@@ -44,7 +46,6 @@ async def catch_nick_bot_reply(client, message: Message):
             return
 
         matched_key = None
-        # Link match karta hai instantly
         for key, data in pending_requests.items():
             if data["original_link"] in msg_text:
                 matched_key = key
@@ -55,13 +56,9 @@ async def catch_nick_bot_reply(client, message: Message):
 
         future = pending_requests[matched_key]["future"]
         if not future.done():
-            # Aakhri link uthata hai jo hamesha bypassed hota hai
             all_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', msg_text)
             if all_urls:
-                extracted_link = all_urls[-1]
-                future.set_result(extracted_link)
-            else:
-                future.set_result(None)
+                future.set_result(all_urls[-1])
 
 
 # ---------------- BACKGROUND ANIMATION TASK ----------------
@@ -72,7 +69,7 @@ async def run_cute_animation(msg):
         "💖 **Fetching your Premium Link...** 🥺"
     ]
     try:
-        # Loop chalta rahega jab tak Nick bot reply na de de
+        await asyncio.sleep(0.5) 
         while True:
             for step in cute_steps:
                 try:
@@ -81,10 +78,9 @@ async def run_cute_animation(msg):
                     pass
                 except Exception:
                     pass
-                # Telegram API block na kare isliye 1.5s ka gap, par link milte hi cancel ho jayega
-                await asyncio.sleep(1.5) 
+                await asyncio.sleep(1.2)
     except asyncio.CancelledError:
-        pass # Jaise hi link milega, ye task yahan aakar chup chap band ho jayega
+        pass
 
 
 @bot.on_message(filters.private & filters.text)
@@ -106,36 +102,55 @@ async def handle_user_links(client, message: Message):
             pass
 
     msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
-    anim_task = None
     task_id = str(random.randint(100000, 999999))
+    
+    anim_task = None
+    poller_task = None
 
     try:
         loop = asyncio.get_event_loop()
         future = loop.create_future()
 
-        # Bot pehle hi net bicha leta hai Nick bot ka reply catch karne ke liye
         async with pending_lock:
             pending_requests[task_id] = {
                 "future": future,
                 "original_link": user_text,
             }
 
-        # Userbot message bhejta hai
-        await userbot.send_message(SECRET_GROUP_ID, user_text)
+        # Userbot bhejta hai message
+        sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
-        # Animation task start ho jata hai
+        # ---------------- ENGINE 2: ACTIVE BACKUP POLLER ----------------
+        async def backup_poller():
+            for _ in range(15):
+                await asyncio.sleep(1)
+                if future.done():
+                    return
+                try:
+                    # Poller ko history check karne ka kaam diya hai, as a backup
+                    async for history_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
+                        if history_msg.reply_to_message_id == sent_msg.id:
+                            hist_text = history_msg.text or history_msg.caption or ""
+                            if "Bypassed" in hist_text or "✅" in hist_text:
+                                urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', hist_text)
+                                if urls and not future.done():
+                                    future.set_result(urls[-1])
+                                    return
+                except Exception:
+                    pass
+
+        poller_task = asyncio.create_task(backup_poller())
         anim_task = asyncio.create_task(run_cute_animation(msg))
 
         try:
-            # ⏳ MAIN LOGIC: Yahan bot wait kar raha hai
-            # Agar 0.2s me aaya, toh yahi 0.2s me aage badh jayega
             extracted_link = await asyncio.wait_for(future, timeout=BYPASS_TIMEOUT)
         except asyncio.TimeoutError:
             extracted_link = None
 
-        # 🔥 THE KILL SWITCH: Yahan par animation task turant cancel/kill ho jata hai!
         if anim_task:
             anim_task.cancel()
+        if poller_task:
+            poller_task.cancel()
 
         # ---------------- FINAL OUTPUT ----------------
         if extracted_link:
@@ -158,6 +173,8 @@ async def handle_user_links(client, message: Message):
     except Exception as e:
         if anim_task:
             anim_task.cancel()
+        if poller_task:
+            poller_task.cancel()
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
 
     finally:
@@ -177,3 +194,4 @@ async def start_services():
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
+    
