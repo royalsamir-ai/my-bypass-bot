@@ -129,12 +129,12 @@ async def start_services():
     await bot.start()
     await userbot.start()
     
-    print("⏳ Warming up Userbot & Bot Cache to fix Peer ID Bug...")
+    print("⏳ Loading all chats to fix Peer ID Bug forever...")
     try:
-        # Pushing a silent message to force cache update in Railway
-        await userbot.send_message(SECRET_GROUP_ID, "🔄 Bot Database Synced!")
-        await bot.get_chat(FORCE_SUB_CHANNEL)
-        print("✅ Cache Successfully Loaded!")
+        # Ye line tere userbot ke saare groups/chats ko memory me save kar legi
+        async for dialog in userbot.get_dialogs():
+            pass
+        print("✅ All Chats Cached Successfully! No more Peer ID errors.")
     except Exception as e:
         print(f"⚠️ Cache Note: {e}")
 
