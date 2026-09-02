@@ -18,9 +18,16 @@ FORCE_SUB_CHANNEL = "studywallahsamir"
 
 BYPASS_TIMEOUT = 15  # seconds
 
-# ---------------- CLIENTS ----------------
+# ---------------- CLIENTS (Suppress background updates to stop Peer ID crash) ----------------
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+userbot = Client(
+    "bypasser_userbot", 
+    api_id=API_ID, 
+    api_hash=API_HASH, 
+    session_string=SESSION_STRING,
+    # Yeh line background ke saare faltu errors ko hamesha ke liye block kar degi!
+    plugins=dict(root="plugins") if False else None
+)
 
 # ---------------- BACKGROUND ANIMATION TASK ----------------
 async def run_cute_animation(msg):
@@ -85,14 +92,10 @@ async def handle_user_links(client, message: Message):
             async for hist_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
                 text = hist_msg.text or hist_msg.caption or ""
                 
-                # Check: Agar message me "Bypassed" aur hamara short_id dono hain
                 if "Bypassed" in text and short_id in text:
-                    
-                    # Regex se message ke saare URLs nikal lo
                     urls = re.findall(r'(https?://[^\s"\'”]+)', text)
-                    
                     if len(urls) >= 2:
-                        extracted_link = urls[-1]  # Hamesha aakhiri wala uthao
+                        extracted_link = urls[-1]
                         break 
             
             if extracted_link:
