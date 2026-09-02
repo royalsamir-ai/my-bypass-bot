@@ -11,6 +11,7 @@ from pyrogram.enums import ChatMemberStatus
 API_ID = int(os.environ.get("API_ID", 37847572))
 API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
 SECRET_GROUP = "studywallahshiledfiles"
 FORCE_SUB_CHANNEL = "studywallahsamir"
@@ -18,6 +19,9 @@ BYPASS_TIMEOUT = 15  # seconds
 
 # ---------------- CLIENTS ----------------
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+
+RESOLVED_GROUP_ID = None
 
 # ---------------- BACKGROUND ANIMATION TASK ----------------
 async def run_cute_animation(msg):
@@ -43,6 +47,7 @@ async def run_cute_animation(msg):
 
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
+    global RESOLVED_GROUP_ID
     user_text = message.text.strip()
     
     if user_text.startswith("/"):
@@ -69,27 +74,26 @@ async def handle_user_links(client, message: Message):
     extracted_link = None
 
     try:
-        sent_msg = await bot.send_message(SECRET_GROUP, user_text)
-        print(f"📤 Link sent to group. Message ID: {sent_msg.id}")
+        if not RESOLVED_GROUP_ID:
+            chat_obj = await userbot.get_chat(SECRET_GROUP)
+            RESOLVED_GROUP_ID = chat_obj.id
+
+        # 🎯 SABSE IMPORTANT: Message ab Userbot bhejega taaki Nick Bot usko pehchaan sake!
+        sent_msg = await userbot.send_message(RESOLVED_GROUP_ID, user_text)
         
-        # Short ID to match
         short_id = user_text.split("/")[-1] if "/" in user_text else user_text[-5:]
 
-        for i in range(BYPASS_TIMEOUT):
+        for _ in range(BYPASS_TIMEOUT):
             await asyncio.sleep(1) 
             
-            async for hist_msg in bot.get_chat_history(SECRET_GROUP, limit=5):
+            # Userbot hi group history check karega
+            async for hist_msg in userbot.get_chat_history(RESOLVED_GROUP_ID, limit=5):
                 text = hist_msg.text or hist_msg.caption or ""
                 
-                # YE HAI MAGIC PRINT: Group ke har message ko logs me print karega
-                print(f"👀 Checking message ID {hist_msg.id}: {text[:50]}...")
-                
-                if short_id in text:
-                    print(f"🎯 Match found for short_id: {short_id} in message!")
+                if "Bypassed" in text and short_id in text:
                     urls = re.findall(r'(https?://[^\s"\'”]+)', text)
                     if len(urls) >= 2:
                         extracted_link = urls[-1]
-                        print(f"🎉 Extracted Link: {extracted_link}")
                         break 
             
             if extracted_link:
@@ -121,12 +125,27 @@ async def handle_user_links(client, message: Message):
 
 
 # ---------------- START SERVICES ----------------
-async def main():
+async def start_services():
+    global RESOLVED_GROUP_ID
     await bot.start()
-    print("🔥 BOT STARTED CLEAN & SMOOTH WITHOUT USERBOT ERRORS 🔥")
+    print("🤖 Main Bot Started Successfully!")
+    
+    await userbot.start()
+    print("🧸 Userbot Started Successfully!")
+
+    try:
+        chat = await userbot.get_chat(SECRET_GROUP)
+        RESOLVED_GROUP_ID = chat.id
+        print(f"✅ Target Group Resolved ID: {RESOLVED_GROUP_ID}")
+    except Exception as e:
+        print(f"⚠️ Could not resolve group ID on start: {e}")
+
+    print("🔥 SYSTEM READY 🔥")
     await idle()
+    
     await bot.stop()
+    await userbot.stop()
 
 if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(main())
-    
+    asyncio.get_event_loop().run_until_complete(start_services())
+                
