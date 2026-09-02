@@ -11,25 +11,14 @@ from pyrogram.enums import ChatMemberStatus
 API_ID = int(os.environ.get("API_ID", 37847572))
 API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
-SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
-SECRET_GROUP_ID = "studywallahshiledfiles"
+SECRET_GROUP = "studywallahshiledfiles"
 FORCE_SUB_CHANNEL = "studywallahsamir"
-
 BYPASS_TIMEOUT = 15  # seconds
 
-# ---------------- CLIENTS (Suppress background updates to stop Peer ID crash) ----------------
+# Sirf main bot run hoga, koi peer id error nahi aayega!
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-userbot = Client(
-    "bypasser_userbot", 
-    api_id=API_ID, 
-    api_hash=API_HASH, 
-    session_string=SESSION_STRING,
-    # Yeh line background ke saare faltu errors ko hamesha ke liye block kar degi!
-    plugins=dict(root="plugins") if False else None
-)
 
-# ---------------- BACKGROUND ANIMATION TASK ----------------
 async def run_cute_animation(msg):
     cute_steps = [
         "✨ **Scanning link for Cuties...** 🎀",
@@ -50,7 +39,6 @@ async def run_cute_animation(msg):
     except asyncio.CancelledError:
         pass
 
-
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
     user_text = message.text.strip()
@@ -60,7 +48,7 @@ async def handle_user_links(client, message: Message):
             await message.reply_text("👋 Hello Cutie! Send me any short link to bypass.")
         return
 
-    # ---------------- 1. FORCE SUB CHECK ----------------
+    # Force Sub Check
     if FORCE_SUB_CHANNEL:
         try:
             user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
@@ -79,17 +67,14 @@ async def handle_user_links(client, message: Message):
     extracted_link = None
 
     try:
-        # Userbot group me link bhejta hai
-        await userbot.send_message(SECRET_GROUP_ID, user_text)
-        
-        # ---------------- ENGINE: ULTRA SMART MATCHER ----------------
+        # Main bot seedha secret group me link bhejega
+        sent_msg = await bot.send_message(SECRET_GROUP, user_text)
         short_id = user_text.split("/")[-1] if "/" in user_text else user_text[-5:]
 
         for _ in range(BYPASS_TIMEOUT):
             await asyncio.sleep(1) 
             
-            # Group ki chat history check karte hain
-            async for hist_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
+            async for hist_msg in bot.get_chat_history(SECRET_GROUP, limit=5):
                 text = hist_msg.text or hist_msg.caption or ""
                 
                 if "Bypassed" in text and short_id in text:
@@ -102,13 +87,12 @@ async def handle_user_links(client, message: Message):
                 break 
 
     except Exception as e:
-        print(f"❌ Error in Bypass Logic: {e}")
+        print(f"❌ Error: {e}")
 
     finally:
         if not anim_task.done():
             anim_task.cancel()
 
-    # ---------------- FINAL OUTPUT ----------------
     if extracted_link:
         virus_count = random.randint(5, 25)
         final_text = (
@@ -126,22 +110,11 @@ async def handle_user_links(client, message: Message):
     else:
         await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
 
-
-# ---------------- START SERVICES ----------------
-async def start_services():
+async def main():
     await bot.start()
-    print("🤖 Main Bot Started Successfully!")
-    
-    await userbot.start()
-    print("🧸 Userbot Started Successfully!")
-
-    print("🔥 SYSTEM READY 🔥")
+    print("🔥 BOT STARTED CLEAN & SMOOTH WITHOUT USERBOT ERRORS 🔥")
     await idle()
-    
     await bot.stop()
-    await userbot.stop()
-
 
 if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(start_services())
-    
+    asyncio.get_event_loop().run_until_complete(main())
