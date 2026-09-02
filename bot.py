@@ -1,3 +1,50 @@
+import os
+import asyncio
+import re
+import random
+from pyrogram import Client, filters, idle
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.errors import UserNotParticipant, MessageNotModified
+from pyrogram.enums import ChatMemberStatus
+
+# ---------------- VARIABLES ----------------
+API_ID = int(os.environ.get("API_ID", 37847572))
+API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+SESSION_STRING = os.environ.get("SESSION_STRING", "")
+
+# Variables fix (Forces string format)
+SECRET_GROUP_ID = "studywallahshiledfiles"
+FORCE_SUB_CHANNEL = "studywallahsamir"
+
+BYPASS_TIMEOUT = 15  # seconds
+
+# ---------------- CLIENTS ----------------
+bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+
+# ---------------- BACKGROUND ANIMATION TASK ----------------
+async def run_cute_animation(msg):
+    cute_steps = [
+        "✨ **Scanning link for Cuties...** 🎀",
+        "🛡️ **Defeating Viruses & Ads...** ⚔️",
+        "💖 **Fetching your Premium Link...** 🥺"
+    ]
+    try:
+        await asyncio.sleep(0.5) 
+        while True:
+            for step in cute_steps:
+                try:
+                    await msg.edit_text(step)
+                except MessageNotModified:
+                    pass
+                except Exception:
+                    pass
+                await asyncio.sleep(1.2)
+    except asyncio.CancelledError:
+        pass
+
+
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
     user_text = message.text.strip()
@@ -89,4 +136,28 @@ async def handle_user_links(client, message: Message):
         await msg.edit_text(final_text, disable_web_page_preview=True)
     else:
         await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
-        
+
+
+# ---------------- START SERVICES ----------------
+async def start_services():
+    await bot.start()
+    await userbot.start()
+    
+    print("⏳ Loading all chats to fix Peer ID Bug forever...")
+    try:
+        # Ye line tere userbot ke saare groups/chats ko memory me save kar legi
+        async for dialog in userbot.get_dialogs():
+            pass
+        print("✅ All Chats Cached Successfully! No more Peer ID errors.")
+    except Exception as e:
+        print(f"⚠️ Cache Note: {e}")
+
+    print("🔥 SYSTEM READY 🔥")
+    await idle()
+    await bot.stop()
+    await userbot.stop()
+
+
+if __name__ == "__main__":
+    asyncio.get_event_loop().run_until_complete(start_services())
+                                    
