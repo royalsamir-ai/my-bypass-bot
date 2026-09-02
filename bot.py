@@ -2,10 +2,9 @@ import os
 import asyncio
 import re
 import random
-import uuid
 from pyrogram import Client, filters, idle
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import UserNotParticipant, FloodWait
+from pyrogram.errors import UserNotParticipant, MessageNotModified
 from pyrogram.enums import ChatMemberStatus
 
 # ---------------- VARIABLES ----------------
@@ -21,62 +20,44 @@ else:
     SECRET_GROUP_ID = secret_env
 
 FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
+
 BYPASS_TIMEOUT = 15  # seconds
 
 # ---------------- CLIENTS ----------------
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-# ---------------- PENDING REQUEST REGISTRY ----------------
-pending_requests: dict[str, asyncio.Future] = {}
-msg_id_to_token: dict[int, str] = {}  # message_id से token ढूँढने के लिए
-pending_lock = asyncio.Lock()
+# ---------------- BACKGROUND ANIMATION TASK ----------------
+async def run_cute_animation(msg):
+    cute_steps = [
+        "✨ **Scanning link for Cuties...** 🎀",
+        "🛡️ **Defeating Viruses & Ads...** ⚔️",
+        "💖 **Fetching your Premium Link...** 🥺"
+    ]
+    try:
+        await asyncio.sleep(0.5) 
+        while True:
+            for step in cute_steps:
+                try:
+                    await msg.edit_text(step)
+                except MessageNotModified:
+                    pass
+                except Exception:
+                    pass
+                await asyncio.sleep(1.2)
+    except asyncio.CancelledError:
+        pass
 
-# ---------------- HELPER FUNCTIONS ----------------
-def extract_token(text: str) -> str | None:
-    match = re.search(r"\[token:(\w+)\]", text)
-    return match.group(1) if match else None
 
-def extract_bypassed_link(text: str) -> str | None:
-    urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', text)
-    if urls:
-        return urls[-1]
-    return None
-
-# ---------------- ENGINE 1: LIVE EVENT LISTENER ----------------
-@userbot.on_message(filters.chat(SECRET_GROUP_ID))
-@userbot.on_edited_message(filters.chat(SECRET_GROUP_ID))
-async def catch_nick_bot_reply(client, message: Message):
-    msg_text = message.text or message.caption or ""
-
-    if "Bypassed" not in msg_text and "✅" not in msg_text:
-        return
-
-    async with pending_lock:
-        if not pending_requests:
-            return
-
-        token = extract_token(msg_text)
-        
-        if not token and message.reply_to_message:
-            token = extract_token(message.reply_to_message.text or "")
-            
-        if not token and message.reply_to_message:
-            token = msg_id_to_token.get(message.reply_to_message.id)
-
-        if not token:
-            return
-
-        future = pending_requests.get(token)
-        if future and not future.done():
-            link = extract_bypassed_link(msg_text)
-            if link:
-                future.set_result(link)
-
-# ---------------- STATIC WAITING MESSAGE ----------------
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
     user_text = message.text.strip()
+    
+    # Simple check to ignore commands like /start
+    if user_text.startswith("/"):
+        if user_text == "/start":
+            await message.reply_text("👋 Hello Cutie! Send me any short link to bypass.")
+        return
 
     # ---------------- 1. FORCE SUB CHECK ----------------
     if FORCE_SUB_CHANNEL:
@@ -92,85 +73,67 @@ async def handle_user_links(client, message: Message):
         except Exception:
             pass
 
-    msg = await message.reply_text("🌸 **Processing your link...** 🛡️")
-
-    token = f"req_{uuid.uuid4().hex[:8]}"
-    loop = asyncio.get_running_loop()
-    future = loop.create_future()
-
-    async with pending_lock:
-        pending_requests[token] = future
-
-    forward_text = f"{user_text} [token:{token}]"
-    sent_msg = None
-    poller_task = None
+    msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
+    anim_task = asyncio.create_task(run_cute_animation(msg))
+    extracted_link = None
 
     try:
-        sent_msg = await userbot.send_message(SECRET_GROUP_ID, forward_text)
+        # Userbot bhejta hai message group me
+        sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
-        async with pending_lock:
-            msg_id_to_token[sent_msg.id] = token
-
-        # ---------------- ENGINE 2: ACTIVE BACKUP POLLER ----------------
-        async def backup_poller():
-            for _ in range(BYPASS_TIMEOUT):
-                await asyncio.sleep(1)
-                if future.done():
-                    return
-                try:
-                    async for history_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                        if sent_msg and history_msg.reply_to_message_id == sent_msg.id:
-                            hist_text = history_msg.text or history_msg.caption or ""
-                            if "Bypassed" in hist_text or "✅" in hist_text:
-                                link = extract_bypassed_link(hist_text)
-                                if link and not future.done():
-                                    future.set_result(link)
-                                    return
-                except FloodWait as e:
-                    # Pyrogram v1 (x) और v2 (value) दोनों के लिए सुरक्षित तरीका
-                    wait_time = getattr(e, 'value', getattr(e, 'x', 5))
-                    await asyncio.sleep(wait_time)
-                except Exception:
-                    pass
-
-        poller_task = asyncio.create_task(backup_poller())
-
-        try:
-            extracted_link = await asyncio.wait_for(future, timeout=BYPASS_TIMEOUT)
-        except asyncio.TimeoutError:
-            extracted_link = None
-
-        if poller_task:
-            poller_task.cancel()
-
-        # ---------------- FINAL OUTPUT ----------------
-        if extracted_link:
-            virus_count = random.randint(5, 25)
-            final_text = (
-                f"**Shield Bypass Complete!** 🎀\n\n"
-                f"**Original Link :** 🔗\n"
-                f"✅ {user_text}\n\n"
-                f"**Shield Link :** 🛡️\n"
-                f"✅ **{extracted_link}**\n\n"
-                f"🦠 *100% Protected from {virus_count} Viruses!* 🛡️\n"
-                f"✨ *This is only for cuties!* 🥺\n"
-                f"━━━━━━━━━━━━━━━━━\n"
-                f"**Powered By @StudyWallahSamir** 🎀"
-            )
-            await msg.edit_text(final_text, disable_web_page_preview=True)
-        else:
-            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
+        # ---------------- ENGINE: ACTIVE POLLER ----------------
+        # 15 seconds tak wait karega reply aane ka
+        for _ in range(BYPASS_TIMEOUT):
+            await asyncio.sleep(1) # Har 1 sec me check karega
+            
+            # Group ki last 5 messages check karna
+            async for hist_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
+                # Ye check karta hai ki message Nick bot ka hai aur hamare link bhejne ke BAAD aaya hai
+                if hist_msg.id <= sent_msg.id:
+                    continue
+                    
+                text = hist_msg.text or hist_msg.caption or ""
+                
+                # Check agar Bypassed text aur hamara original link dono us message me hain
+                if "Bypassed Link:" in text and user_text in text:
+                    # Sirf Bypassed section ke aage ka link nikalne ke liye
+                    parts = text.split("Bypassed Link:")
+                    if len(parts) > 1:
+                        bypassed_section = parts[1]
+                        urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', bypassed_section)
+                        if urls:
+                            extracted_link = urls[0]
+                            break # Inner loop break
+            
+            if extracted_link:
+                break # Outer polling loop break
 
     except Exception as e:
-        if poller_task:
-            poller_task.cancel()
-        await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
+        print(f"Error: {e}")
 
     finally:
-        async with pending_lock:
-            pending_requests.pop(token, None)
-            if sent_msg:
-                msg_id_to_token.pop(sent_msg.id, None)
+        # Loop khatam hote hi animation band kar do
+        if not anim_task.done():
+            anim_task.cancel()
+
+    # ---------------- FINAL OUTPUT ----------------
+    if extracted_link:
+        virus_count = random.randint(5, 25)
+        final_text = (
+            f"**Shield Bypass Complete!** 🎀\n\n"
+            f"**Original Link :** 🔗\n"
+            f"✅ {user_text}\n\n"
+            f"**Shield Link :** 🛡️\n"
+            f"✅ **{extracted_link}**\n\n"
+            f"🦠 *100% Protected from {virus_count} Viruses!* 🛡️\n"
+            f"✨ *This is only for cuties!* 🥺\n"
+            f"━━━━━━━━━━━━━━━━━\n"
+            f"**Powered By @StudyWallahSamir** 🎀"
+        )
+        await msg.edit_text(final_text, disable_web_page_preview=True)
+    else:
+        await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
+
 
 # ---------------- START SERVICES ----------------
 async def start_services():
@@ -181,5 +144,6 @@ async def start_services():
     await bot.stop()
     await userbot.stop()
 
+
 if __name__ == "__main__":
-    asyncio.run(start_services())
+    asyncio.get_event_loop().run_until_complete(start_services())
