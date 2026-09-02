@@ -76,7 +76,6 @@ async def handle_user_links(client, message: Message):
         await userbot.send_message(SECRET_GROUP_ID, user_text)
         
         # ---------------- ENGINE: ULTRA SMART MATCHER ----------------
-        # Pura link match karne ke bajaye sirf aakhiri code nikalte hain (e.g., mcQJ)
         short_id = user_text.split("/")[-1] if "/" in user_text else user_text[-5:]
 
         for _ in range(BYPASS_TIMEOUT):
@@ -86,13 +85,12 @@ async def handle_user_links(client, message: Message):
             async for hist_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
                 text = hist_msg.text or hist_msg.caption or ""
                 
-                # Check: Agar message me "Bypassed" aur hamara short_id (jaise ndV3) dono hain
+                # Check: Agar message me "Bypassed" aur hamara short_id dono hain
                 if "Bypassed" in text and short_id in text:
                     
-                    # Regex se message ke saare URLs nikal lo (emojis ko automatically chhod dega)
+                    # Regex se message ke saare URLs nikal lo
                     urls = re.findall(r'(https?://[^\s"\'”]+)', text)
                     
-                    # Nick Bot ke message me Original Link upar hota hai, Bypassed Link hamesha LAST me hota hai
                     if len(urls) >= 2:
                         extracted_link = urls[-1]  # Hamesha aakhiri wala uthao
                         break 
@@ -131,11 +129,11 @@ async def start_services():
     await bot.start()
     await userbot.start()
     
-    print("⏳ Loading all chats to fix Peer ID Bug forever...")
+    print("⏳ Warming up Secret Group Cache...")
     try:
-        async for dialog in userbot.get_dialogs():
-            pass
-        print("✅ All Chats Cached Successfully!")
+        # Sirf secret group ko cache karega taaki bot hang na ho
+        await userbot.get_chat(SECRET_GROUP_ID)
+        print("✅ Secret Group Cached Successfully!")
     except Exception as e:
         print(f"⚠️ Cache Note: {e}")
 
@@ -143,6 +141,7 @@ async def start_services():
     await idle()
     await bot.stop()
     await userbot.stop()
+
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
