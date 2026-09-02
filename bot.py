@@ -13,13 +13,15 @@ API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
-secret_env = os.environ.get("SECRET_GROUP_ID", "studywallahshiledfiles")
-if str(secret_env).lstrip('-').isdigit():
-    SECRET_GROUP_ID = int(secret_env)
-else:
-    SECRET_GROUP_ID = secret_env
+# Ye function ID, Username, @ ya link kuch bhi automatic theek kar dega
+def parse_id(value):
+    value = str(value).strip().replace("@", "").replace("https://t.me/", "")
+    if value.lstrip('-').isdigit():
+        return int(value)
+    return value
 
-FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
+SECRET_GROUP_ID = parse_id(os.environ.get("SECRET_GROUP_ID", "studywallahshiledfiles"))
+FORCE_SUB_CHANNEL = parse_id(os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir"))
 
 BYPASS_TIMEOUT = 15  # seconds
 
@@ -53,7 +55,6 @@ async def run_cute_animation(msg):
 async def handle_user_links(client, message: Message):
     user_text = message.text.strip()
     
-    # Simple check to ignore commands like /start
     if user_text.startswith("/"):
         if user_text == "/start":
             await message.reply_text("👋 Hello Cutie! Send me any short link to bypass.")
@@ -82,37 +83,31 @@ async def handle_user_links(client, message: Message):
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
         
         # ---------------- ENGINE: ACTIVE POLLER ----------------
-        # 15 seconds tak wait karega reply aane ka
         for _ in range(BYPASS_TIMEOUT):
-            await asyncio.sleep(1) # Har 1 sec me check karega
+            await asyncio.sleep(1) 
             
-            # Group ki last 5 messages check karna
             async for hist_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                # Ye check karta hai ki message Nick bot ka hai aur hamare link bhejne ke BAAD aaya hai
                 if hist_msg.id <= sent_msg.id:
                     continue
                     
                 text = hist_msg.text or hist_msg.caption or ""
                 
-                # Check agar Bypassed text aur hamara original link dono us message me hain
                 if "Bypassed Link:" in text and user_text in text:
-                    # Sirf Bypassed section ke aage ka link nikalne ke liye
                     parts = text.split("Bypassed Link:")
                     if len(parts) > 1:
                         bypassed_section = parts[1]
                         urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', bypassed_section)
                         if urls:
                             extracted_link = urls[0]
-                            break # Inner loop break
+                            break 
             
             if extracted_link:
-                break # Outer polling loop break
+                break 
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error in Bypass Logic: {e}")
 
     finally:
-        # Loop khatam hote hi animation band kar do
         if not anim_task.done():
             anim_task.cancel()
 
@@ -139,11 +134,20 @@ async def handle_user_links(client, message: Message):
 async def start_services():
     await bot.start()
     await userbot.start()
+    
+    print("⏳ Warming up Userbot Cache...")
+    try:
+        # Userbot ko force kar rahe hain ki wo start hote hi group ko yaad kar le
+        await userbot.get_chat(SECRET_GROUP_ID)
+        print(f"✅ Cache Loaded for Secret Group!")
+    except Exception as e:
+        print(f"⚠️ Cache Warning: {e}")
+
     print("🔥 SYSTEM READY 🔥")
     await idle()
     await bot.stop()
     await userbot.stop()
 
-
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
+    
