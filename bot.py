@@ -13,7 +13,6 @@ API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
-# Variables fix (Forces string format)
 SECRET_GROUP_ID = "studywallahshiledfiles"
 FORCE_SUB_CHANNEL = "studywallahsamir"
 
@@ -73,40 +72,29 @@ async def handle_user_links(client, message: Message):
     extracted_link = None
 
     try:
-        # Userbot bhejta hai message group me
-        sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
-        print(f"🔗 Link sent to group! Message ID: {sent_msg.id}")
+        # Userbot group me link bhejta hai
+        await userbot.send_message(SECRET_GROUP_ID, user_text)
         
-        # ---------------- ENGINE: EXACT FORMAT MATCHER ----------------
+        # ---------------- ENGINE: ULTRA SMART MATCHER ----------------
+        # Pura link match karne ke bajaye sirf aakhiri code nikalte hain (e.g., mcQJ)
+        short_id = user_text.split("/")[-1] if "/" in user_text else user_text[-5:]
+
         for _ in range(BYPASS_TIMEOUT):
             await asyncio.sleep(1) 
             
+            # Group ki chat history check karte hain
             async for hist_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                # Sirf naye messages check karega
-                if hist_msg.id <= sent_msg.id:
-                    continue
-                    
                 text = hist_msg.text or hist_msg.caption or ""
                 
-                # Nick bot ka exact format check
-                if "Bypassed Link:" in text:
-                    print("✅ Nick Bot Message Found!")
+                # Check: Agar message me "Bypassed" aur hamara short_id (jaise ndV3) dono hain
+                if "Bypassed" in text and short_id in text:
                     
-                    # Message ko lines me tod do
-                    lines = text.split('\n')
-                    for i, line in enumerate(lines):
-                        if "Bypassed Link:" in line:
-                            # Theek uske agle (next) line me link hoga
-                            if i + 1 < len(lines):
-                                next_line = lines[i+1]
-                                # Us line me se link nikalna (✅ ignore karke)
-                                urls = re.findall(r'(https?://[^\s]+)', next_line)
-                                if urls:
-                                    extracted_link = urls[0]
-                                    print(f"🎉 Bypass Link Extracted: {extracted_link}")
-                                    break 
+                    # Regex se message ke saare URLs nikal lo (emojis ko automatically chhod dega)
+                    urls = re.findall(r'(https?://[^\s"\'”]+)', text)
                     
-                    if extracted_link:
+                    # Nick Bot ke message me Original Link upar hota hai, Bypassed Link hamesha LAST me hota hai
+                    if len(urls) >= 2:
+                        extracted_link = urls[-1]  # Hamesha aakhiri wala uthao
                         break 
             
             if extracted_link:
@@ -145,10 +133,9 @@ async def start_services():
     
     print("⏳ Loading all chats to fix Peer ID Bug forever...")
     try:
-        # Ye line tere userbot ke saare groups/chats ko memory me save kar legi
         async for dialog in userbot.get_dialogs():
             pass
-        print("✅ All Chats Cached Successfully! No more Peer ID errors.")
+        print("✅ All Chats Cached Successfully!")
     except Exception as e:
         print(f"⚠️ Cache Note: {e}")
 
@@ -157,7 +144,6 @@ async def start_services():
     await bot.stop()
     await userbot.stop()
 
-
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
-                                    
+    
