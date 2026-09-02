@@ -27,15 +27,66 @@ BYPASS_TIMEOUT = 15  # seconds
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
+# ---------------- GLOBAL MESSAGE MAPPING ----------------
+# Yeh dictionary group_message_id ko user_id se map karti hai
+message_mapping: dict[int, int] = {}
+mapping_lock = asyncio.Lock()
+
 # ---------------- PENDING REQUEST REGISTRY ----------------
 pending_requests: dict[str, dict] = {}
 pending_lock = asyncio.Lock()
 
 # ---------------- ENGINE 1: LIVE EVENT LISTENER ----------------
-@userbot.on_message()
+@userbot.on_message(filters.chat(SECRET_GROUP_ID))
 async def catch_nick_bot_reply(client, message: Message):
     msg_text = message.text or message.caption or ""
-
+    
+    # Pehle check karo ki yeh reply hai kisi forwarded message ka
+    if message.reply_to_message and message.reply_to_message.id in message_mapping:
+        replied_msg_id = message.reply_to_message.id
+        original_user_id = message_mapping[replied_msg_id]
+        
+        if "Bypassed" in msg_text or "✅" in msg_text:
+            # URLs extract karo
+            all_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', msg_text)
+            if all_urls:
+                bypassed_link = all_urls[-1]
+                
+                # User ko seedha bypassed link bhejo
+                try:
+                    await bot.send_message(
+                        original_user_id,
+                        f"✅ **Shield Bypass Complete!** 🎀\n\n"
+                        f"**Shield Link :** 🛡️\n"
+                        f"✅ **{bypassed_link}**\n\n"
+                        f"🦠 *100% Protected from Viruses!* 🛡️\n"
+                        f"✨ *This is only for cuties!* 🥺\n"
+                        f"━━━━━━━━━━━━━━━━━\n"
+                        f"**Powered By @StudyWallahSamir** 🎀",
+                        disable_web_page_preview=True
+                    )
+                    
+                    # Mapping clean karo
+                    async with mapping_lock:
+                        message_mapping.pop(replied_msg_id, None)
+                    
+                    print(f"✅ Direct bheja user {original_user_id} ko: {bypassed_link}")
+                    
+                    # Future bhi set kar do agar pending request hai
+                    async with pending_lock:
+                        for key, data in pending_requests.items():
+                            if data.get("group_msg_id") == replied_msg_id:
+                                future = data["future"]
+                                if not future.done():
+                                    future.set_result(bypassed_link)
+                                break
+                    
+                    return  # Kaam ho gaya, aage mat jao
+                    
+                except Exception as e:
+                    print(f"❌ Direct send error: {e}")
+    
+    # Original logic (backward compatibility ke liye)
     if "Bypassed" not in msg_text and "✅" not in msg_text:
         return
 
@@ -101,6 +152,7 @@ async def handle_user_links(client, message: Message):
 
     msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
     task_id = str(random.randint(100000, 999999))
+    user_id = message.from_user.id  # User ID store karo
     
     anim_task = None
     poller_task = None
@@ -113,10 +165,22 @@ async def handle_user_links(client, message: Message):
             pending_requests[task_id] = {
                 "future": future,
                 "original_link": user_text,
+                "user_id": user_id,  # User ID bhi store karo
             }
 
         # Userbot bhejta hai message
         sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
+        
+        # ---------------- GLOBAL MAPPING STORE ----------------
+        # Group message ID ko user ID se map karo
+        async with mapping_lock:
+            message_mapping[sent_msg.id] = user_id
+        
+        # Pending request me group_msg_id bhi store karo
+        async with pending_lock:
+            pending_requests[task_id]["group_msg_id"] = sent_msg.id
+        
+        print(f"📤 Message {sent_msg.id} forward hua, user {user_id} ke liye")
         
         # ---------------- ENGINE 2: ACTIVE BACKUP POLLER ----------------
         async def backup_poller():
@@ -179,8 +243,14 @@ async def handle_user_links(client, message: Message):
         await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
 
     finally:
+        # Cleanup - mapping aur pending requests dono saaf karo
         async with pending_lock:
-            pending_requests.pop(task_id, None)
+            if task_id in pending_requests:
+                group_msg_id = pending_requests[task_id].get("group_msg_id")
+                if group_msg_id:
+                    async with mapping_lock:
+                        message_mapping.pop(group_msg_id, None)
+                pending_requests.pop(task_id, None)
 
 
 # ---------------- START SERVICES ----------------
@@ -188,6 +258,8 @@ async def start_services():
     await bot.start()
     await userbot.start()
     print("🔥 SYSTEM READY 🔥")
+    print(f"📡 Group monitor ho raha hai: {SECRET_GROUP_ID}")
+    print(f"👥 Active mappings: {len(message_mapping)}")
     await idle()
     await bot.stop()
     await userbot.stop()
