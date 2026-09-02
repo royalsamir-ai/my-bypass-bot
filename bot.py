@@ -16,9 +16,10 @@ SECRET_GROUP = "studywallahshiledfiles"
 FORCE_SUB_CHANNEL = "studywallahsamir"
 BYPASS_TIMEOUT = 15  # seconds
 
-# Sirf main bot run hoga, koi peer id error nahi aayega!
+# ---------------- CLIENTS ----------------
 bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
+# ---------------- BACKGROUND ANIMATION TASK ----------------
 async def run_cute_animation(msg):
     cute_steps = [
         "✨ **Scanning link for Cuties...** 🎀",
@@ -38,6 +39,7 @@ async def run_cute_animation(msg):
                 await asyncio.sleep(1.2)
     except asyncio.CancelledError:
         pass
+
 
 @bot.on_message(filters.private & filters.text)
 async def handle_user_links(client, message: Message):
@@ -67,27 +69,34 @@ async def handle_user_links(client, message: Message):
     extracted_link = None
 
     try:
-        # Main bot seedha secret group me link bhejega
         sent_msg = await bot.send_message(SECRET_GROUP, user_text)
+        print(f"📤 Link sent to group. Message ID: {sent_msg.id}")
+        
+        # Short ID to match
         short_id = user_text.split("/")[-1] if "/" in user_text else user_text[-5:]
 
-        for _ in range(BYPASS_TIMEOUT):
+        for i in range(BYPASS_TIMEOUT):
             await asyncio.sleep(1) 
             
             async for hist_msg in bot.get_chat_history(SECRET_GROUP, limit=5):
                 text = hist_msg.text or hist_msg.caption or ""
                 
-                if "Bypassed" in text and short_id in text:
+                # YE HAI MAGIC PRINT: Group ke har message ko logs me print karega
+                print(f"👀 Checking message ID {hist_msg.id}: {text[:50]}...")
+                
+                if short_id in text:
+                    print(f"🎯 Match found for short_id: {short_id} in message!")
                     urls = re.findall(r'(https?://[^\s"\'”]+)', text)
                     if len(urls) >= 2:
                         extracted_link = urls[-1]
+                        print(f"🎉 Extracted Link: {extracted_link}")
                         break 
             
             if extracted_link:
                 break 
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error in Logic: {e}")
 
     finally:
         if not anim_task.done():
@@ -110,6 +119,8 @@ async def handle_user_links(client, message: Message):
     else:
         await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
 
+
+# ---------------- START SERVICES ----------------
 async def main():
     await bot.start()
     print("🔥 BOT STARTED CLEAN & SMOOTH WITHOUT USERBOT ERRORS 🔥")
@@ -118,3 +129,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(main())
+    
