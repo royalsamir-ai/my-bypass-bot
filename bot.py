@@ -1,269 +1,117 @@
 import os
 import asyncio
 import re
-import random
 from pyrogram import Client, filters, idle
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import UserNotParticipant, MessageNotModified
-from pyrogram.enums import ChatMemberStatus
+from pyrogram.types import Message
 
-# ---------------- VARIABLES ----------------
+# ----------------- CONFIGURATION -----------------
 API_ID = int(os.environ.get("API_ID", 37847572))
 API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
-SESSION_STRING = os.environ.get("SESSION_STRING", "")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+SESSION_STRING = os.environ.get("SESSION_STRING", "YOUR_USERBOT_SESSION_HERE")
 
-secret_env = os.environ.get("SECRET_GROUP_ID", "studywallahshiledfiles")
-if str(secret_env).lstrip('-').isdigit():
-    SECRET_GROUP_ID = int(secret_env)
-else:
-    SECRET_GROUP_ID = secret_env
+# Screenshot ke hisab se Group ID (Better hai ki number wali ID use karo jaise -100xxxx)
+SECRET_GROUP_ID = os.environ.get("SECRET_GROUP_ID", "studywallahshiledfiles")
+if str(SECRET_GROUP_ID).lstrip('-').isdigit():
+    SECRET_GROUP_ID = int(SECRET_GROUP_ID)
 
-FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir")
+# ------------------- CLIENTS -------------------
+bot = Client("main_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+userbot = Client("helper_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-BYPASS_TIMEOUT = 15  # seconds
+# Global memory map
+active_routing_map = {}
+map_lock = asyncio.Lock()
 
-# ---------------- CLIENTS ----------------
-bot = Client("shield_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-userbot = Client("bypasser_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
-
-# ---------------- GLOBAL MESSAGE MAPPING ----------------
-# Yeh dictionary group_message_id ko user_id se map karti hai
-message_mapping: dict[int, int] = {}
-mapping_lock = asyncio.Lock()
-
-# ---------------- PENDING REQUEST REGISTRY ----------------
-pending_requests: dict[str, dict] = {}
-pending_lock = asyncio.Lock()
-
-# ---------------- ENGINE 1: LIVE EVENT LISTENER ----------------
-@userbot.on_message(filters.chat(SECRET_GROUP_ID))
-async def catch_nick_bot_reply(client, message: Message):
-    msg_text = message.text or message.caption or ""
+# ----------------- 1. USER LINK HANDLER -----------------
+@bot.on_message(filters.private & filters.text)
+async def handle_incoming_link(client, message: Message):
+    user_link = message.text.strip()
+    user_id = message.from_user.id
     
-    # Pehle check karo ki yeh reply hai kisi forwarded message ka
-    if message.reply_to_message and message.reply_to_message.id in message_mapping:
-        replied_msg_id = message.reply_to_message.id
-        original_user_id = message_mapping[replied_msg_id]
-        
-        if "Bypassed" in msg_text or "✅" in msg_text:
-            # URLs extract karo
-            all_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', msg_text)
-            if all_urls:
-                bypassed_link = all_urls[-1]
-                
-                # User ko seedha bypassed link bhejo
-                try:
-                    await bot.send_message(
-                        original_user_id,
-                        f"✅ **Shield Bypass Complete!** 🎀\n\n"
-                        f"**Shield Link :** 🛡️\n"
-                        f"✅ **{bypassed_link}**\n\n"
-                        f"🦠 *100% Protected from Viruses!* 🛡️\n"
-                        f"✨ *This is only for cuties!* 🥺\n"
-                        f"━━━━━━━━━━━━━━━━━\n"
-                        f"**Powered By @StudyWallahSamir** 🎀",
-                        disable_web_page_preview=True
-                    )
-                    
-                    # Mapping clean karo
-                    async with mapping_lock:
-                        message_mapping.pop(replied_msg_id, None)
-                    
-                    print(f"✅ Direct bheja user {original_user_id} ko: {bypassed_link}")
-                    
-                    # Future bhi set kar do agar pending request hai
-                    async with pending_lock:
-                        for key, data in pending_requests.items():
-                            if data.get("group_msg_id") == replied_msg_id:
-                                future = data["future"]
-                                if not future.done():
-                                    future.set_result(bypassed_link)
-                                break
-                    
-                    return  # Kaam ho gaya, aage mat jao
-                    
-                except Exception as e:
-                    print(f"❌ Direct send error: {e}")
-    
-    # Original logic (backward compatibility ke liye)
-    if "Bypassed" not in msg_text and "✅" not in msg_text:
+    if not user_link.startswith(("http://", "https://")):
+        await message.reply_text("❌ Please send a valid link starting with http or https")
         return
 
-    async with pending_lock:
-        if not pending_requests:
-            return
-
-        matched_key = None
-        for key, data in pending_requests.items():
-            if data["original_link"] in msg_text:
-                matched_key = key
-                break
-
-        if matched_key is None:
-            return  
-
-        future = pending_requests[matched_key]["future"]
-        if not future.done():
-            all_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', msg_text)
-            if all_urls:
-                future.set_result(all_urls[-1])
-
-
-# ---------------- BACKGROUND ANIMATION TASK ----------------
-async def run_cute_animation(msg):
-    cute_steps = [
-        "✨ **Scanning link for Cuties...** 🎀",
-        "🛡️ **Defeating Viruses & Ads...** ⚔️",
-        "💖 **Fetching your Premium Link...** 🥺"
-    ]
-    try:
-        await asyncio.sleep(0.5) 
-        while True:
-            for step in cute_steps:
-                try:
-                    await msg.edit_text(step)
-                except MessageNotModified:
-                    pass
-                except Exception:
-                    pass
-                await asyncio.sleep(1.2)
-    except asyncio.CancelledError:
-        pass
-
-
-@bot.on_message(filters.private & filters.text)
-async def handle_user_links(client, message: Message):
-    user_text = message.text.strip()
-
-    # ---------------- 1. FORCE SUB CHECK ----------------
-    if FORCE_SUB_CHANNEL:
-        try:
-            user_status = await client.get_chat_member(FORCE_SUB_CHANNEL, message.from_user.id)
-            if user_status.status in [ChatMemberStatus.BANNED, ChatMemberStatus.RESTRICTED]:
-                return await message.reply_text("❌ You are banned from the channel.")
-        except UserNotParticipant:
-            return await message.reply_text(
-                "**Hello Cutie! 👋**\n\nTo use this premium bypass bot, you need to join our main channel first.\n\n👇 **Join the channel and send your link again!**",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel 🔔", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]])
-            )
-        except Exception:
-            pass
-
-    msg = await message.reply_text("🌸 **Waking up the Shield Bots...** 🧸")
-    task_id = str(random.randint(100000, 999999))
-    user_id = message.from_user.id  # User ID store karo
+    status_msg = await message.reply_text("⏳ **Processing your link through Shield Engines...**")
     
-    anim_task = None
-    poller_task = None
-
     try:
-        loop = asyncio.get_event_loop()
-        future = loop.create_future()
+        # Userbot group me bhejega (Royal Samir ke naam se)
+        sent_in_group = await userbot.send_message(SECRET_GROUP_ID, user_link)
+        
+        async with map_lock:
+            active_routing_map[sent_in_group.id] = (user_id, status_msg.id)
+            
+        print(f"📥 Tracked: Group Message ID {sent_in_group.id} for User {user_id}")
+        
+    except Exception as e:
+        print(f"❌ Error sending to group: {e}")
+        await status_msg.edit_text("❌ Configuration Error: Could not reach processing group.")
 
-        async with pending_lock:
-            pending_requests[task_id] = {
-                "future": future,
-                "original_link": user_text,
-                "user_id": user_id,  # User ID bhi store karo
-            }
 
-        # Userbot bhejta hai message
-        sent_msg = await userbot.send_message(SECRET_GROUP_ID, user_text)
+# ----------------- 2. GROUP RESPONSE LISTENER -----------------
+@userbot.on_message(filters.chat(SECRET_GROUP_ID))
+async def catch_bypass_reply(client, message: Message):
+    # Agar kisi message ka reply hai tabhi aage badhega
+    if not message.reply_to_message:
+        return
         
-        # ---------------- GLOBAL MAPPING STORE ----------------
-        # Group message ID ko user ID se map karo
-        async with mapping_lock:
-            message_mapping[sent_msg.id] = user_id
+    target_reply_id = message.reply_to_message.id
+    
+    async with map_lock:
+        if target_reply_id not in active_routing_map:
+            return
+        original_user_id, status_message_id = active_routing_map[target_reply_id]
+
+    msg_text = message.text or message.caption or ""
+    
+    # Screenshot ke exact text "Bypassed Link :" ko target karo
+    if "bypassed link" in msg_text.lower():
+        # Text me se saare links ki list nikalo
+        extracted_urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', msg_text)
         
-        # Pending request me group_msg_id bhi store karo
-        async with pending_lock:
-            pending_requests[task_id]["group_msg_id"] = sent_msg.id
-        
-        print(f"📤 Message {sent_msg.id} forward hua, user {user_id} ke liye")
-        
-        # ---------------- ENGINE 2: ACTIVE BACKUP POLLER ----------------
-        async def backup_poller():
-            for _ in range(15): # 15 seconds max wait
-                await asyncio.sleep(1)
-                if future.done():
-                    return
+        if extracted_urls:
+            # Screenshot me final link hamesha sabse AAKHIRI me hai (devuploads wala link)
+            final_bypass_url = extracted_urls[-1]
+            
+            try:
+                # User ko reply edit karke link deliver karo
+                await bot.send_message(
+                    chat_id=original_user_id,
+                    text=f"✅ **Bypass Complete!** 🎀\n\n"
+                         f"🛡️ **Your Protected Link:**\n"
+                         f"👉 {final_bypass_url}\n\n"
+                         f"━━━━━━━━━━━━━━━━━\n"
+                         f"**Powered By @StudyWallahSamir** 🎀",
+                    disable_web_page_preview=True
+                )
+                
+                # Pehle wale loading/status message ko delete kar do
                 try:
-                    # Agar live update drop ho gaya, toh ye history me jhaank kar result le aayega
-                    async for history_msg in userbot.get_chat_history(SECRET_GROUP_ID, limit=5):
-                        if history_msg.reply_to_message_id == sent_msg.id:
-                            hist_text = history_msg.text or history_msg.caption or ""
-                            if "Bypassed" in hist_text or "✅" in hist_text:
-                                urls = re.findall(r'(https?://[^\s\)\]\}"\'”]+)', hist_text)
-                                if urls and not future.done():
-                                    future.set_result(urls[-1])
-                                    return
+                    await bot.delete_messages(chat_id=original_user_id, message_ids=status_message_id)
                 except Exception:
                     pass
-
-        # Dono tasks ko background me chala do
-        poller_task = asyncio.create_task(backup_poller())
-        anim_task = asyncio.create_task(run_cute_animation(msg))
-
-        try:
-            # Wait for either Engine 1 or Engine 2 to find the link
-            extracted_link = await asyncio.wait_for(future, timeout=BYPASS_TIMEOUT)
-        except asyncio.TimeoutError:
-            extracted_link = None
-
-        # Jaise hi link mila, dono background tasks ko rok do!
-        if anim_task:
-            anim_task.cancel()
-        if poller_task:
-            poller_task.cancel()
-
-        # ---------------- FINAL OUTPUT ----------------
-        if extracted_link:
-            virus_count = random.randint(5, 25)
-            final_text = (
-                f"**Shield Bypass Complete!** 🎀\n\n"
-                f"**Original Link :** 🔗\n"
-                f"✅ {user_text}\n\n"
-                f"**Shield Link :** 🛡️\n"
-                f"✅ **{extracted_link}**\n\n"
-                f"🦠 *100% Protected from {virus_count} Viruses!* 🛡️\n"
-                f"✨ *This is only for cuties!* 🥺\n"
-                f"━━━━━━━━━━━━━━━━━\n"
-                f"**Powered By @StudyWallahSamir** 🎀"
-            )
-            await msg.edit_text(final_text, disable_web_page_preview=True)
-        else:
-            await msg.edit_text("❌ **Oops Cutie! Bypass failed.**\n(Link took too long or format was wrong. Try again!)")
-
-    except Exception as e:
-        if anim_task:
-            anim_task.cancel()
-        if poller_task:
-            poller_task.cancel()
-        await msg.edit_text(f"❌ **Technical Error:**\n`{e}`")
-
-    finally:
-        # Cleanup - mapping aur pending requests dono saaf karo
-        async with pending_lock:
-            if task_id in pending_requests:
-                group_msg_id = pending_requests[task_id].get("group_msg_id")
-                if group_msg_id:
-                    async with mapping_lock:
-                        message_mapping.pop(group_msg_id, None)
-                pending_requests.pop(task_id, None)
+                
+                # Dictionary saaf karo
+                async with map_lock:
+                    active_routing_map.pop(target_reply_id, None)
+                    
+                print(f"✨ Successfully bypassed and delivered to User {original_user_id}")
+                
+            except Exception as e:
+                print(f"❌ Error delivering message to user: {e}")
 
 
-# ---------------- START SERVICES ----------------
-async def start_services():
+# ----------------- SYSTEM RUNNER -----------------
+async def start_system():
+    print("🛰️ Starting clean routing system engine...")
     await bot.start()
     await userbot.start()
-    print("🔥 SYSTEM READY 🔥")
-    print(f"📡 Group monitor ho raha hai: {SECRET_GROUP_ID}")
-    print(f"👥 Active mappings: {len(message_mapping)}")
+    print("🚀 System is ONLINE! Waiting for user links...")
     await idle()
     await bot.stop()
     await userbot.stop()
 
-
 if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(start_services())
+    asyncio.run(start_system())
+    
