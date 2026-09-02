@@ -13,15 +13,9 @@ API_HASH = os.environ.get("API_HASH", "e79d219ac2531482d3ceb281b9190c58")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
-# Ye function ID, Username, @ ya link kuch bhi automatic theek kar dega
-def parse_id(value):
-    value = str(value).strip().replace("@", "").replace("https://t.me/", "")
-    if value.lstrip('-').isdigit():
-        return int(value)
-    return value
-
-SECRET_GROUP_ID = parse_id(os.environ.get("SECRET_GROUP_ID", "studywallahshiledfiles"))
-FORCE_SUB_CHANNEL = parse_id(os.environ.get("FORCE_SUB_CHANNEL", "studywallahsamir"))
+# Variables fix (Forces string format)
+SECRET_GROUP_ID = "studywallahshiledfiles"
+FORCE_SUB_CHANNEL = "studywallahsamir"
 
 BYPASS_TIMEOUT = 15  # seconds
 
@@ -135,18 +129,20 @@ async def start_services():
     await bot.start()
     await userbot.start()
     
-    print("⏳ Warming up Userbot Cache...")
+    print("⏳ Warming up Userbot & Bot Cache to fix Peer ID Bug...")
     try:
-        # Userbot ko force kar rahe hain ki wo start hote hi group ko yaad kar le
-        await userbot.get_chat(SECRET_GROUP_ID)
-        print(f"✅ Cache Loaded for Secret Group!")
+        # Pushing a silent message to force cache update in Railway
+        await userbot.send_message(SECRET_GROUP_ID, "🔄 Bot Database Synced!")
+        await bot.get_chat(FORCE_SUB_CHANNEL)
+        print("✅ Cache Successfully Loaded!")
     except Exception as e:
-        print(f"⚠️ Cache Warning: {e}")
+        print(f"⚠️ Cache Note: {e}")
 
     print("🔥 SYSTEM READY 🔥")
     await idle()
     await bot.stop()
     await userbot.stop()
+
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_services())
