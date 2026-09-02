@@ -127,18 +127,14 @@ async def handle_user_links(client, message: Message):
 # ---------------- START SERVICES ----------------
 async def start_services():
     await bot.start()
-    await userbot.start()
+    print("🤖 Main Bot Started Successfully!")
     
-    print("⏳ Warming up Secret Group Cache...")
-    try:
-        # Sirf secret group ko cache karega taaki bot hang na ho
-        await userbot.get_chat(SECRET_GROUP_ID)
-        print("✅ Secret Group Cached Successfully!")
-    except Exception as e:
-        print(f"⚠️ Cache Note: {e}")
+    await userbot.start()
+    print("🧸 Userbot Started Successfully!")
 
     print("🔥 SYSTEM READY 🔥")
     await idle()
+    
     await bot.stop()
     await userbot.stop()
 
